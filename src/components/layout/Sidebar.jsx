@@ -8,6 +8,7 @@ const links = [
   { name: "Users", path: "/users" },
   { name: "Channels", path: "/channels" },
   { name: "Gifts", path: "/gifts" },
+  { name: "Plans", path: "/plans" },
   { name: "Wallets", path: "/wallets" },
   { name: "Ledger", path: "/ledger" },
   { name: "Economy", path: "/economy" },

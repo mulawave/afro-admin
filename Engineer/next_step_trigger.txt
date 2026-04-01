@@ -1,1 +1,1 @@
-build users + wallet + ledger panel (go to step 3)
+build gifts + plans + channels panel (go to step 4)
