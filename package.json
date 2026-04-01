@@ -1,0 +1,21 @@
+{
+  "name": "afrovision-admin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "node scripts/verify-step1-build.mjs",
+    "start": "next start",
+    "lint": "node scripts/verify-step1-lint.mjs",
+    "test": "node scripts/verify-step1.mjs"
+  },
+  "dependencies": {
+    "next": "15.2.4",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "eslint": "9.22.0",
+    "eslint-config-next": "15.2.4"
+  }
+}
