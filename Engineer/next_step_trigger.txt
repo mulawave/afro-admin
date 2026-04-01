@@ -1,1 +1,1 @@
-build economy + blockchain + settings panel (go to step 5)
+build communication + audit + feature flags panel (go to step 6)

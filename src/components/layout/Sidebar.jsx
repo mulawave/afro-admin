@@ -13,6 +13,8 @@ const links = [
   { name: "Ledger", path: "/ledger" },
   { name: "Economy", path: "/economy" },
   { name: "Blockchain", path: "/blockchain" },
+  { name: "Communication", path: "/communication" },
+  { name: "Feature Flags", path: "/feature-flags" },
   { name: "Settings", path: "/settings" },
   { name: "Audit", path: "/audit" },
 ];
