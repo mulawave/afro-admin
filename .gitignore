@@ -1,3 +1,5 @@
 node_modules/
 .npm-cache/
+.npmrc
+.next/
 .DS_Store

@@ -1,1 +1,1 @@
-build admin layout + routing (go to step 1)
+build dashboard (go to step 2)
