@@ -1,1 +1,1 @@
-build dashboard (go to step 2)
+build users + wallet + ledger panel (go to step 3)

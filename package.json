@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/verify-step2.mjs"
+    "test": "node scripts/verify-step3.mjs"
   },
   "dependencies": {
     "next": "15.2.4",
