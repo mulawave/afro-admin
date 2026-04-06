@@ -3,7 +3,7 @@ export default function PoolsCard({ pools }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-900 mb-3">Pool Balances</h2>
+      <h2 className="mb-3 text-lg font-semibold text-white">Pool Balances</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <PoolTile label="Operations (₦)" value={pools.operations_ngn} color="blue" />
         <PoolTile label="Community (₦)" value={pools.community_ngn} color="green" />
@@ -15,17 +15,17 @@ export default function PoolsCard({ pools }) {
 }
 
 const POOL_COLORS = {
-  blue: "bg-blue-50 border-blue-200",
-  green: "bg-green-50 border-green-200",
-  purple: "bg-purple-50 border-purple-200",
-  amber: "bg-amber-50 border-amber-200",
+  blue: "border-sky-300/18 bg-sky-500/8",
+  green: "border-emerald-300/18 bg-emerald-500/8",
+  purple: "border-indigo-300/18 bg-indigo-500/8",
+  amber: "border-amber-300/18 bg-amber-500/8",
 };
 
 function PoolTile({ label, value, color = "blue" }) {
   return (
     <div className={`rounded-lg border p-4 ${POOL_COLORS[color] || POOL_COLORS.blue}`}>
-      <h4 className="text-sm text-gray-600 font-medium">{label}</h4>
-      <p className="text-xl font-bold text-gray-900 mt-1">
+      <h4 className="text-sm font-medium text-white/58">{label}</h4>
+      <p className="mt-1 text-xl font-bold text-white">
         {typeof value === "number" ? value.toLocaleString("en-NG") : "—"}
       </p>
     </div>

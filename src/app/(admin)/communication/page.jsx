@@ -1,43 +1,126 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-
-const CHANNEL_OPTIONS = [
-  { value: "push", label: "Push Notification" },
-  { value: "email", label: "Email" },
-  { value: "sms", label: "SMS" },
-];
+import NoticeBanner from "@/components/ui/NoticeBanner";
 
 export default function CommunicationPage() {
-  const [type, setType] = useState("push");
+  const searchParams = useSearchParams();
+  const [mode, setMode] = useState("broadcast");
+  const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [title, setTitle] = useState("AfroVision admin notice");
   const [message, setMessage] = useState("");
+  const [link, setLink] = useState("");
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [usersError, setUsersError] = useState(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
-  function handleSend() {
-    if (!message.trim()) return;
+  useEffect(() => {
+    let active = true;
 
-    const channelLabel = CHANNEL_OPTIONS.find((c) => c.value === type)?.label || type;
+    async function loadUsers() {
+      try {
+        setLoadingUsers(true);
+        const res = await api.get("/admin/users");
+        if (!active) return;
+        setUsers(res.users ?? []);
+        setUsersError(null);
+      } catch (err) {
+        if (!active) return;
+        setUsersError(err.message || "Failed to load users");
+      } finally {
+        if (active) {
+          setLoadingUsers(false);
+        }
+      }
+    }
+
+    loadUsers();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const preselectedRecipient = searchParams.get("recipient") || "";
+    if (preselectedRecipient) {
+      setMode("direct");
+      setSelectedUserId(preselectedRecipient);
+    }
+  }, [searchParams]);
+
+  const selectedUser = users.find((user) => user.id === selectedUserId) || null;
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return users.filter((user) => {
+      if (!q) return true;
+      return [user.name, user.email, user.id]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [userSearch, users]);
+
+  function handleSend() {
+    if (!title.trim() || !message.trim()) return;
+    if (mode === "direct" && !selectedUserId) return;
 
     setConfirm({
-      title: "Send Broadcast",
-      message: `Send ${channelLabel} to all users?\n\nMessage: "${message.trim().slice(0, 100)}${message.trim().length > 100 ? "..." : ""}"`,
+      title: mode === "direct" ? "Send Direct Notice" : "Broadcast Notice",
+      message: mode === "direct"
+        ? `Send this notice to ${selectedUser?.name || selectedUser?.email || selectedUserId}?`
+        : `Broadcast this notice to all users with inbox delivery and push attempts?`,
       destructive: false,
+      busy: false,
+      error: null,
+      confirmLabel: mode === "direct" ? "Send Notice" : "Broadcast Notice",
       action: async () => {
+        setConfirm((current) => ({ ...current, busy: true, error: null }));
         setSending(true);
         setResult(null);
         try {
-          await api.post("/admin/communication/send", {
-            type,
-            message: message.trim(),
-          });
-          setResult({ success: true, text: `${channelLabel} broadcast sent successfully.` });
+          if (mode === "direct") {
+            await api.post("/notifications/send-user", {
+              userId: selectedUserId,
+              title: title.trim(),
+              body: message.trim(),
+              type: "admin_alert",
+              source: "push",
+              link: link.trim() || undefined,
+            });
+            setResult({ success: true, text: `Notice sent to ${selectedUser?.email || selectedUserId}.` });
+          } else {
+            const response = await api.post("/notifications/broadcast", {
+              title: title.trim(),
+              body: message.trim(),
+              type: "admin_alert",
+              source: "push",
+              link: link.trim() || undefined,
+            });
+            setResult({
+              success: true,
+              text: `Broadcast sent to ${response.result?.persisted || 0} inboxes with ${response.result?.successCount || 0} push successes.`,
+            });
+          }
           setMessage("");
+          setLink("");
+          if (mode === "direct") {
+            setSelectedUserId("");
+            setUserSearch("");
+          }
+          return true;
         } catch (err) {
-          setResult({ success: false, text: err.message || "Failed to send broadcast" });
+          const messageText = err.message || "Failed to send notice";
+          setResult({ success: false, text: messageText });
+          setConfirm((current) => ({ ...current, busy: false, error: messageText }));
+          return false;
         } finally {
           setSending(false);
         }
@@ -48,38 +131,104 @@ export default function CommunicationPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Communication</h1>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Communication</h1>
+          <p className="mt-2 text-sm text-white/58">Send inbox notices with push delivery attempts, with direct targeting or full-platform broadcast.</p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-5">
-        {/* Channel selector */}
+      <NoticeBanner tone="error" message={usersError} />
+
+      <div className="space-y-5 rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-6 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Channel
+          <label className="mb-2 block text-sm font-medium text-white/75">
+            Delivery
+          </label>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/72">
+            Notices are persisted to the in-app inbox and sent as push notifications when users have registered device tokens.
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-white/75">
+            Audience
           </label>
           <div className="flex gap-3">
-            {CHANNEL_OPTIONS.map((ch) => (
+            {[
+              { value: "broadcast", label: "Broadcast to all users" },
+              { value: "direct", label: "Target one user" },
+            ].map((option) => (
               <button
-                key={ch.value}
-                onClick={() => setType(ch.value)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                  type === ch.value
-                    ? "border-blue-600 bg-blue-50 text-blue-700"
-                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                key={option.value}
+                onClick={() => setMode(option.value)}
+                disabled={sending}
+                className={`rounded-2xl border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  mode === option.value
+                    ? "border-[var(--av-light-orange)]/40 bg-[rgba(245,193,108,0.12)] text-white"
+                    : "border-white/10 bg-white/6 text-white/62 hover:bg-white/10"
                 }`}
               >
-                {ch.value === "push" && "🔔 "}
-                {ch.value === "email" && "📧 "}
-                {ch.value === "sms" && "💬 "}
-                {ch.label}
+                {option.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Message */}
+        {mode === "direct" ? (
+          <div className="space-y-3 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-white/75">Recipient</label>
+              <input
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                placeholder="Search by name, email, or user id"
+                className="w-full rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
+              />
+            </div>
+
+            {loadingUsers ? (
+              <div className="text-sm text-white/45">Loading users...</div>
+            ) : (
+              <div className="max-h-56 space-y-2 overflow-y-auto">
+                {filteredUsers.slice(0, 8).map((user) => {
+                  const active = user.id === selectedUserId;
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => setSelectedUserId(user.id)}
+                      className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
+                        active
+                          ? "border-[var(--av-light-orange)]/40 bg-[rgba(245,193,108,0.12)]"
+                          : "border-white/10 bg-white/6 hover:bg-white/10"
+                      }`}
+                    >
+                      <div>
+                        <p className="font-medium text-white">{user.name || user.email}</p>
+                        <p className="text-xs text-white/45">{user.email}</p>
+                      </div>
+                      <span className="text-xs text-white/35">{user.role}</span>
+                    </button>
+                  );
+                })}
+                {!filteredUsers.length ? <div className="text-sm text-white/45">No matching users found.</div> : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="mb-2 block text-sm font-medium text-white/75">Title</label>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Notice title"
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-white/75">
             Message
           </label>
           <textarea
@@ -87,41 +236,39 @@ export default function CommunicationPage() {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your broadcast message..."
             rows={5}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            className="w-full resize-none rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
           />
-          <div className="text-xs text-gray-400 mt-1 text-right">
+          <div className="mt-1 text-right text-xs text-white/35">
             {message.length} characters
           </div>
         </div>
 
-        {/* Result */}
-        {result && (
-          <div
-            className={`px-4 py-3 rounded-lg text-sm ${
-              result.success
-                ? "bg-green-50 border border-green-200 text-green-700"
-                : "bg-red-50 border border-red-200 text-red-700"
-            }`}
-          >
-            {result.text}
-          </div>
-        )}
+        <div>
+          <label className="mb-2 block text-sm font-medium text-white/75">Optional Deep Link</label>
+          <input
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+            placeholder="e.g. /wallet or /channels/123"
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
+          />
+        </div>
 
-        {/* Send */}
+        {result ? <NoticeBanner tone={result.success ? "success" : "error"} message={result.text} /> : null}
+
         <div className="flex justify-end">
           <button
             onClick={handleSend}
-            disabled={sending || !message.trim()}
-            className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={sending || !title.trim() || !message.trim() || (mode === "direct" && !selectedUserId)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-6 py-2.5 text-sm font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {sending ? "Sending..." : "Send Broadcast"}
+            {sending && <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--av-dark-blue)]/30 border-t-[var(--av-dark-blue)]/80" />}
+            {sending ? "Sending..." : mode === "direct" ? "Send Direct Notice" : "Broadcast Notice"}
           </button>
         </div>
       </div>
 
-      {/* Info */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
-        ⚠ All broadcasts are logged to the audit trail and cannot be undone.
+      <div className="rounded-[1.5rem] border border-[var(--av-light-orange)]/20 bg-[rgba(245,193,108,0.08)] px-4 py-3 text-sm text-white/72">
+        Every send is persisted to the inbox and now recorded in the audit trail with delivery counts.
       </div>
 
       {/* Confirm Dialog */}
@@ -130,10 +277,19 @@ export default function CommunicationPage() {
         title={confirm?.title || ""}
         message={confirm?.message || ""}
         destructive={confirm?.destructive}
+        busy={confirm?.busy}
+        error={confirm?.error}
+        confirmLabel={confirm?.confirmLabel}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
-          if (confirm?.action) await confirm.action();
-          setConfirm(null);
+          if (!confirm?.action) {
+            setConfirm(null);
+            return;
+          }
+          const shouldClose = await confirm.action();
+          if (shouldClose !== false) {
+            setConfirm(null);
+          }
         }}
       />
     </div>

@@ -18,8 +18,8 @@ export default function RevenueChart() {
 
   const fetchTrend = useCallback(async () => {
     try {
-      const res = await api.get("/admin/stats/trend");
-      setChartData(res);
+      const res = await api.get("/admin/dashboard/trend");
+      setChartData(res.trend ?? []);
       setError(null);
     } catch {
       setError("Could not load trend data");
@@ -31,33 +31,33 @@ export default function RevenueChart() {
   }, [fetchTrend]);
 
   return (
-    <div className="bg-white p-5 rounded-lg shadow-sm">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h3>
+    <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+      <h3 className="mb-4 text-lg font-semibold text-white">Revenue Trend</h3>
 
       {error && (
         <div className="flex items-center justify-center h-[300px]">
-          <p className="text-gray-400 text-sm">{error}</p>
+          <p className="text-sm text-white/45">{error}</p>
         </div>
       )}
 
       {!error && !chartData && (
         <div className="flex items-center justify-center h-[300px]">
-          <p className="text-gray-400 text-sm">Loading chart...</p>
+          <p className="text-sm text-white/45">Loading chart...</p>
         </div>
       )}
 
       {!error && chartData && chartData.length > 0 && (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis
               dataKey="day"
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: "rgba(255,255,255,0.55)" }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: "rgba(255,255,255,0.55)" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`}
@@ -65,17 +65,19 @@ export default function RevenueChart() {
             <Tooltip
               formatter={(value) => [`₦${Number(value).toLocaleString("en-NG")}`, "Revenue"]}
               contentStyle={{
-                borderRadius: "8px",
-                border: "1px solid #e5e7eb",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                borderRadius: "18px",
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(5,10,48,0.96)",
+                boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+                color: "#fff",
               }}
             />
             <Line
               type="monotone"
               dataKey="revenue"
-              stroke="#2563eb"
-              strokeWidth={2}
-              dot={{ r: 4, fill: "#2563eb" }}
+              stroke="#f5c16c"
+              strokeWidth={3}
+              dot={{ r: 4, fill: "#f49617" }}
               activeDot={{ r: 6 }}
             />
           </LineChart>
@@ -84,7 +86,7 @@ export default function RevenueChart() {
 
       {!error && chartData && chartData.length === 0 && (
         <div className="flex items-center justify-center h-[300px]">
-          <p className="text-gray-400 text-sm">No trend data available yet</p>
+          <p className="text-sm text-white/45">No trend data available yet</p>
         </div>
       )}
     </div>

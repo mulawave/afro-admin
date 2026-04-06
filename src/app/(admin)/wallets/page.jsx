@@ -14,7 +14,7 @@ export default function WalletsPage() {
     try {
       setLoading(true);
       const res = await api.get("/admin/wallets");
-      setWallets(Array.isArray(res) ? res : res.data ?? []);
+      setWallets(res.wallets ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load wallets");
@@ -62,27 +62,44 @@ export default function WalletsPage() {
       render: (row) =>
         row.updated_at ? new Date(row.updated_at).toLocaleDateString() : "—",
     },
+    {
+      key: "bsc_address",
+      label: "BSC Address",
+      render: (row) => (
+        <span className="block max-w-[220px] truncate font-mono text-xs text-white/60">
+          {row.bsc_address || "Not created"}
+        </span>
+      ),
+    },
+    {
+      key: "wallet_status",
+      label: "Wallet",
+      render: (row) => row.wallet_status || "not_created",
+    },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Wallets</h1>
-        <span className="text-sm text-gray-500">{filtered.length} wallets</span>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Wallets</h1>
+          <p className="mt-2 text-sm text-white/58">Review custodial balances and blockchain wallet creation status across all users.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">{filtered.length} wallets</span>
       </div>
 
-      <div>
+      <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <input
           type="text"
           placeholder="Search by email or UID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full max-w-md rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
         />
       </div>
 
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={load} className="ml-3 underline">Retry</button>
         </div>
@@ -90,14 +107,12 @@ export default function WalletsPage() {
 
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
         </div>
       )}
 
       {!loading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <DataTable columns={columns} rows={filtered} emptyMessage="No wallets found" />
-        </div>
+        <DataTable columns={columns} rows={filtered} emptyMessage="No wallets found" />
       )}
     </div>
   );

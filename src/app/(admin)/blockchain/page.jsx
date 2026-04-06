@@ -10,15 +10,30 @@ export default function BlockchainPage() {
   const [error, setError] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [saving, setSaving] = useState(null);
-  const [reAuthPassword, setReAuthPassword] = useState("");
-  const [reAuthOpen, setReAuthOpen] = useState(false);
-  const [pendingEnvSwitch, setPendingEnvSwitch] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/blockchain");
-      setCfg(res.data ?? res);
+      const [settingsRes, readinessRes, treasuryRes] = await Promise.allSettled([
+        api.get("/admin/settings"),
+        api.get("/vpt/admin/preflight"),
+        api.get("/vpt/admin/treasury"),
+      ]);
+
+      if (settingsRes.status !== "fulfilled") {
+        throw settingsRes.reason;
+      }
+
+      const config = (settingsRes.value.settings ?? []).reduce((accumulator, setting) => {
+        accumulator[setting.key] = setting.value;
+        return accumulator;
+      }, {});
+
+      setCfg({
+        ...config,
+        readiness: readinessRes.status === "fulfilled" ? readinessRes.value.readiness : null,
+        treasury: treasuryRes.status === "fulfilled" ? treasuryRes.value.treasury : null,
+      });
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load blockchain config");
@@ -39,7 +54,7 @@ export default function BlockchainPage() {
       action: async () => {
         setSaving(key);
         try {
-          await api.patch("/admin/blockchain", { key, value });
+          await api.patch(`/admin/settings/${key}`, { value });
           await load();
         } catch {
           // handled by api
@@ -51,29 +66,7 @@ export default function BlockchainPage() {
   }
 
   function requestEnvSwitch(value) {
-    setPendingEnvSwitch(value);
-    setReAuthPassword("");
-    setReAuthOpen(true);
-  }
-
-  async function confirmEnvSwitch() {
-    if (!reAuthPassword) return;
-    setSaving("ENVIRONMENT");
-    setReAuthOpen(false);
-    try {
-      await api.patch("/admin/blockchain", {
-        key: "ENVIRONMENT",
-        value: pendingEnvSwitch,
-        password: reAuthPassword,
-      });
-      await load();
-    } catch {
-      // handled by api
-    } finally {
-      setSaving(null);
-      setPendingEnvSwitch(null);
-      setReAuthPassword("");
-    }
+    requestSave("ENVIRONMENT", value, "Environment");
   }
 
   function requestKeyUpdate(value) {
@@ -84,10 +77,7 @@ export default function BlockchainPage() {
       action: async () => {
         setSaving("TREASURY_PRIVATE_KEY");
         try {
-          await api.patch("/admin/blockchain", {
-            key: "TREASURY_PRIVATE_KEY",
-            value,
-          });
+          await api.patch("/admin/settings/TREASURY_PRIVATE_KEY", { value });
           await load();
         } catch {
           // handled by api
@@ -101,14 +91,14 @@ export default function BlockchainPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+        <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+      <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
         {error}
         <button onClick={load} className="ml-3 underline">Retry</button>
       </div>
@@ -118,35 +108,50 @@ export default function BlockchainPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Blockchain Control</h1>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Blockchain Control</h1>
+          <p className="mt-2 text-sm text-white/58">Review readiness, treasury state, and core execution settings for swaps and distributions.</p>
+        </div>
         <EnvBadge env={cfg?.ENVIRONMENT} />
       </div>
 
-      {/* Environment */}
+      <Section title="Readiness">
+        <div className="grid gap-4 md:grid-cols-3">
+          <ReadinessCard label="Status" value={cfg?.readiness?.ready ? "Ready" : "Not ready"} tone={cfg?.readiness?.ready ? "good" : "warn"} />
+          <ReadinessCard label="Environment" value={cfg?.readiness?.environment || cfg?.ENVIRONMENT || "—"} />
+          <ReadinessCard label="Treasury" value={cfg?.treasury?.address || cfg?.readiness?.treasury_address || "Unavailable"} />
+        </div>
+        {Array.isArray(cfg?.readiness?.missing) && cfg.readiness.missing.length > 0 ? (
+          <p className="mt-4 text-sm text-red-200">Missing: {cfg.readiness.missing.join(", ")}</p>
+        ) : null}
+        {Array.isArray(cfg?.readiness?.invalid) && cfg.readiness.invalid.length > 0 ? (
+          <p className="mt-2 text-sm text-amber-200">Invalid: {cfg.readiness.invalid.join(", ")}</p>
+        ) : null}
+      </Section>
+
       <Section title="Environment">
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm font-medium text-gray-700">Active Environment</span>
+          <span className="text-sm font-medium text-white/72">Active Environment</span>
           <div className="flex items-center gap-3">
             <select
               value={cfg?.ENVIRONMENT || "staging"}
               onChange={(e) => requestEnvSwitch(e.target.value)}
               disabled={saving === "ENVIRONMENT"}
-              className="px-3 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-white outline-none disabled:opacity-50"
             >
               <option value="staging">Staging</option>
               <option value="production">Production</option>
             </select>
             {saving === "ENVIRONMENT" && (
-              <span className="text-xs text-gray-500">Switching...</span>
+              <span className="text-xs text-white/45">Switching...</span>
             )}
           </div>
         </div>
-        <p className="text-xs text-amber-600 mt-1">
-          ⚠ Environment switch requires password re-entry
+        <p className="mt-1 text-xs text-white/45">
+          Environment guards affect which chain configuration the distribution engine expects.
         </p>
       </Section>
 
-      {/* Contract Addresses */}
       <Section title="Contract Addresses">
         <EditableField
           label="VPT Token"
@@ -156,9 +161,9 @@ export default function BlockchainPage() {
         />
         <EditableField
           label="Router"
-          value={cfg?.PANCAKE_ROUTER_ADDRESS}
-          saving={saving === "PANCAKE_ROUTER_ADDRESS"}
-          onSave={(v) => requestSave("PANCAKE_ROUTER_ADDRESS", v, "PancakeSwap Router")}
+          value={cfg?.PANCAKE_ROUTER}
+          saving={saving === "PANCAKE_ROUTER"}
+          onSave={(v) => requestSave("PANCAKE_ROUTER", v, "PancakeSwap Router")}
         />
         <EditableField
           label="WBNB"
@@ -168,25 +173,25 @@ export default function BlockchainPage() {
         />
       </Section>
 
-      {/* RPC */}
       <Section title="RPC Configuration">
         <EditableField
           label="BSC RPC URL"
-          value={cfg?.BSC_RPC_URL}
-          saving={saving === "BSC_RPC_URL"}
-          onSave={(v) => requestSave("BSC_RPC_URL", v, "BSC RPC URL")}
+          value={cfg?.BSC_RPC}
+          saving={saving === "BSC_RPC"}
+          onSave={(v) => requestSave("BSC_RPC", v, "BSC RPC URL")}
         />
       </Section>
 
-      {/* Treasury */}
       <Section title="Treasury">
+        <div className="mb-4 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/72">
+          Treasury balance: {cfg?.treasury?.balance_bnb ? `${cfg.treasury.balance_bnb} BNB` : "Unavailable"}
+        </div>
         <TreasuryKeyField
           saving={saving === "TREASURY_PRIVATE_KEY"}
           onSave={requestKeyUpdate}
         />
       </Section>
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title || ""}
@@ -198,44 +203,6 @@ export default function BlockchainPage() {
           setConfirm(null);
         }}
       />
-
-      {/* Re-Auth Modal for Environment Switch */}
-      {reAuthOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setReAuthOpen(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Confirm Environment Switch
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Switching to <strong>{pendingEnvSwitch}</strong> requires password re-entry.
-            </p>
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={reAuthPassword}
-              onChange={(e) => setReAuthPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
-              autoFocus
-            />
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => { setReAuthOpen(false); setPendingEnvSwitch(null); }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmEnvSwitch}
-                disabled={!reAuthPassword}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                Switch Environment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -243,8 +210,8 @@ export default function BlockchainPage() {
 function EnvBadge({ env }) {
   const isProd = env === "production";
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-      isProd ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+      isProd ? "border border-red-400/30 bg-red-500/10 text-red-200" : "border border-amber-400/30 bg-amber-500/10 text-amber-200"
     }`}>
       {isProd ? "🔴 PRODUCTION" : "🟡 STAGING"}
     </span>
@@ -253,8 +220,8 @@ function EnvBadge({ env }) {
 
 function Section({ title, children }) {
   return (
-    <div className="bg-white rounded-lg shadow p-5">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">{title}</h2>
+    <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+      <h2 className="mb-4 text-lg font-semibold text-white">{title}</h2>
       {children}
     </div>
   );
@@ -279,39 +246,39 @@ function EditableField({ label, value, onSave, saving }) {
   }
 
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-      <span className="text-sm font-medium text-gray-700 w-48">{label}</span>
+    <div className="flex items-center justify-between border-b border-white/8 py-2 last:border-b-0">
+      <span className="w-48 text-sm font-medium text-white/72">{label}</span>
       {editing ? (
         <div className="flex items-center gap-2">
           <input
             type="text"
             value={val}
             onChange={(e) => setVal(e.target.value)}
-            className="w-64 px-3 py-1.5 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-64 rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-sm font-mono text-white outline-none"
             autoFocus
           />
           <button
             onClick={handleSave}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+            className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-1.5 text-xs font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105"
           >
             Save
           </button>
           <button
             onClick={handleCancel}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+            className="rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-xs font-medium text-white/75 transition hover:bg-white/10"
           >
             Cancel
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-900 font-mono truncate max-w-xs">
+          <span className="max-w-xs truncate font-mono text-sm text-white">
             {value ?? "—"}
           </span>
           <button
             onClick={() => { setVal(String(value ?? "")); setEditing(true); }}
             disabled={saving}
-            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            className="px-3 py-1.5 text-xs font-medium text-[var(--av-light-orange)] hover:text-white disabled:opacity-50"
           >
             {saving ? "Saving..." : "Edit"}
           </button>
@@ -335,14 +302,14 @@ function TreasuryKeyField({ saving, onSave }) {
   return (
     <div className="py-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">Private Key</span>
+        <span className="text-sm font-medium text-white/72">Private Key</span>
         {!editing ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400 font-mono">••••••••••••••••</span>
+            <span className="font-mono text-sm text-white/40">••••••••••••••••</span>
             <button
               onClick={() => setEditing(true)}
               disabled={saving}
-              className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+              className="px-3 py-1.5 text-xs font-medium text-red-200 hover:text-white disabled:opacity-50"
             >
               {saving ? "Updating..." : "Update Key"}
             </button>
@@ -354,27 +321,42 @@ function TreasuryKeyField({ saving, onSave }) {
               value={val}
               onChange={(e) => setVal(e.target.value)}
               placeholder="Paste new private key"
-              className="w-64 px-3 py-1.5 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-64 rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-sm font-mono text-white outline-none placeholder:text-white/32"
               autoFocus
             />
             <button
               onClick={handleSave}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
+              className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500"
             >
               Save
             </button>
             <button
               onClick={() => { setVal(""); setEditing(false); }}
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+              className="rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-xs font-medium text-white/75 transition hover:bg-white/10"
             >
               Cancel
             </button>
           </div>
         )}
       </div>
-      <p className="text-xs text-red-500 mt-1">
-        ⚠ Key is stored encrypted. Never returned in API responses.
+      <p className="mt-1 text-xs text-red-200">
+        Key is stored encrypted and never returned by the API.
       </p>
+    </div>
+  );
+}
+
+function ReadinessCard({ label, value, tone = "default" }) {
+  const tones = {
+    default: "border-white/10 bg-white/[0.03]",
+    good: "border-emerald-400/20 bg-emerald-500/10",
+    warn: "border-amber-400/20 bg-amber-500/10",
+  };
+
+  return (
+    <div className={`rounded-2xl border px-4 py-4 ${tones[tone] || tones.default}`}>
+      <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-white">{value}</p>
     </div>
   );
 }

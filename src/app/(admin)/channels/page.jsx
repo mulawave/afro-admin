@@ -18,7 +18,7 @@ export default function ChannelsPage() {
     try {
       setLoading(true);
       const res = await api.get("/admin/channels");
-      setChannels(Array.isArray(res) ? res : res.data ?? []);
+      setChannels(res.channels ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load channels");
@@ -44,47 +44,35 @@ export default function ChannelsPage() {
       action: async () => {
         setActionLoading(true);
         try {
-          await api.patch(`/admin/channels/${channel.id}`, {
-            is_active: !channel.is_active,
+          await api.post(`/admin/channels/${channel.id}/${channel.is_active ? "disable" : "enable"}`);
+          await loadChannels();
+        } catch {
+          // handled by api
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
+  function togglePremium(channel) {
+    const requiresPayment = !channel.requires_payment;
+    setConfirm({
+      title: requiresPayment ? "Enable Premium Access" : "Disable Premium Access",
+      message: requiresPayment
+        ? `Turn "${channel.name}" into a paid stream entry channel using its current default fees?`
+        : `Remove paid entry requirements from "${channel.name}"?`,
+      destructive: false,
+      action: async () => {
+        setActionLoading(true);
+        try {
+          await api.patch(`/admin/channels/${channel.id}/premium`, {
+            requires_payment: requiresPayment,
+            entry_fee_type: channel.entry_fee_type || "ngn",
+            entry_fee_ngn: channel.entry_fee_ngn || 500,
+            entry_fee_vpt_units: channel.entry_fee_vpt_units || 100,
+            access_duration_minutes: channel.access_duration_minutes || 120,
           });
-          await loadChannels();
-        } catch {
-          // handled by api
-        } finally {
-          setActionLoading(false);
-        }
-      },
-    });
-  }
-
-  function stopStream(channel) {
-    setConfirm({
-      title: "Stop Stream",
-      message: `Force stop the live stream on "${channel.name}"? This will disconnect the streamer and all viewers immediately.`,
-      destructive: true,
-      action: async () => {
-        setActionLoading(true);
-        try {
-          await api.post(`/admin/channels/${channel.id}/stop`);
-          await loadChannels();
-        } catch {
-          // handled by api
-        } finally {
-          setActionLoading(false);
-        }
-      },
-    });
-  }
-
-  function deleteChannel(channel) {
-    setConfirm({
-      title: "Delete Channel",
-      message: `Permanently delete "${channel.name}"? This will remove all programs, events, and references tied to this channel. This cannot be undone.`,
-      destructive: true,
-      action: async () => {
-        setActionLoading(true);
-        try {
-          await api.delete(`/admin/channels/${channel.id}`);
           await loadChannels();
         } catch {
           // handled by api
@@ -100,47 +88,48 @@ export default function ChannelsPage() {
     const q = search.toLowerCase();
     return (
       (c.name && c.name.toLowerCase().includes(q)) ||
-      (c.owner_uid && c.owner_uid.toLowerCase().includes(q))
+      (c.owner_id && c.owner_id.toLowerCase().includes(q)) ||
+      (c.owner_display_name && c.owner_display_name.toLowerCase().includes(q)) ||
+      (c.owner_email && c.owner_email.toLowerCase().includes(q))
     );
   });
 
   const columns = [
     { key: "name", label: "Name" },
-    { key: "owner_uid", label: "Owner" },
+    {
+      key: "owner_display_name",
+      label: "Owner",
+      render: (row) => (
+        <div className="space-y-0.5">
+          <p className="font-medium text-white">{row.owner_display_name || row.owner_id || "Unknown owner"}</p>
+          <p className="text-xs text-white/42">{row.owner_email || row.owner_id || "No owner email"}</p>
+        </div>
+      ),
+    },
     {
       key: "type",
       label: "Type",
       render: (row) => (
         <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            row.is_private
-              ? "bg-purple-100 text-purple-700"
-              : "bg-blue-100 text-blue-700"
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+            row.type === "private"
+              ? "border border-indigo-400/30 bg-indigo-500/10 text-indigo-200"
+              : "border border-sky-400/30 bg-sky-500/10 text-sky-200"
           }`}
         >
-          {row.is_private ? "Private" : "Public"}
+          {row.type === "private" ? "Private" : "Public"}
         </span>
       ),
     },
     {
       key: "status",
       label: "Status",
-      render: (row) => (
-        <StatusBadge status={row.is_active ? "active" : "disabled"} />
-      ),
+      render: (row) => <StatusBadge status={row.is_active ? "active" : "disabled"} />,
     },
     {
-      key: "live",
-      label: "Live",
-      render: (row) =>
-        row.is_live ? (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            LIVE
-          </span>
-        ) : (
-          <span className="text-gray-400 text-xs">—</span>
-        ),
+      key: "premium",
+      label: "Premium",
+      render: (row) => <StatusBadge status={row.requires_payment ? "active" : "inactive"} />,
     },
     {
       key: "actions",
@@ -149,27 +138,23 @@ export default function ChannelsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => toggleChannel(row)}
-            className={`text-sm font-medium ${
+            disabled={actionLoading}
+            className={`inline-flex items-center gap-1.5 text-sm font-medium disabled:opacity-50 ${
               row.is_active
-                ? "text-amber-600 hover:text-amber-800"
-                : "text-green-600 hover:text-green-800"
+                ? "text-amber-300 hover:text-amber-200"
+                : "text-emerald-300 hover:text-emerald-200"
             }`}
           >
+            {actionLoading && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />}
             {row.is_active ? "Disable" : "Enable"}
           </button>
-          {row.is_live && (
-            <button
-              onClick={() => stopStream(row)}
-              className="text-sm font-medium text-red-600 hover:text-red-800"
-            >
-              Stop
-            </button>
-          )}
           <button
-            onClick={() => deleteChannel(row)}
-            className="text-sm font-medium text-red-600 hover:text-red-800"
+            onClick={() => togglePremium(row)}
+            disabled={actionLoading}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-300 hover:text-sky-200 disabled:opacity-50"
           >
-            Delete
+            {actionLoading && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />}
+            {row.requires_payment ? "Unpremium" : "Premium"}
           </button>
         </div>
       ),
@@ -177,28 +162,29 @@ export default function ChannelsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Channels</h1>
-        <span className="text-sm text-gray-500">
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Channels</h1>
+          <p className="mt-2 text-sm text-white/58">Moderate active visibility and premium access behavior for creator channels.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
           {filtered.length} channel{filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
-      {/* Search */}
-      <div>
+      <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <input
           type="text"
           placeholder="Search by channel name or owner..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full max-w-md rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
         />
       </div>
 
-      {/* Error */}
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={loadChannels} className="ml-3 underline">
             Retry
@@ -206,25 +192,16 @@ export default function ChannelsPage() {
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
         </div>
       )}
 
-      {/* Table */}
       {!loading && !error && (
-        <div className="bg-white rounded-lg shadow">
-          <DataTable
-            columns={columns}
-            rows={filtered}
-            emptyMessage="No channels found"
-          />
-        </div>
+        <DataTable columns={columns} rows={filtered} emptyMessage="No channels found" />
       )}
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title || ""}

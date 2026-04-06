@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.npm-cache/
+.env
+.env.local
+.env.production.local
+*.log
+npm-debug.log*
+.DS_Store
+.git/
+reports/
+Engineer/
+AGENTS.md
+monitor.md
+test_admin.js
+scripts/

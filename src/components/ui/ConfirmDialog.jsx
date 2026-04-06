@@ -1,32 +1,47 @@
 "use client";
 
-export default function ConfirmDialog({ open, title, message, onConfirm, onCancel, destructive = false }) {
+export default function ConfirmDialog({
+  open,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  destructive = false,
+  busy = false,
+  error = null,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+}) {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="absolute inset-0 bg-[rgba(2,6,23,0.72)] backdrop-blur-sm" onClick={onCancel} />
 
-      <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-        <p className="text-sm text-gray-600 mb-6">{message}</p>
+      <div className="relative mx-4 w-full max-w-sm rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface-strong)] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
+        <h3 className="mb-2 text-lg font-semibold text-white">{title}</h3>
+        <p className="mb-6 text-sm leading-6 text-white/66">{message}</p>
+
+        {error ? <p className="mb-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
 
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            disabled={busy}
+            className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-white/78 transition-colors hover:bg-white/10"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+            disabled={busy}
+            className={`rounded-2xl px-4 py-2 text-sm font-medium text-white transition-colors ${
               destructive
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-blue-600 hover:bg-blue-700"
+                ? "bg-red-600 hover:bg-red-500"
+                : "bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] text-[var(--av-dark-blue)] hover:brightness-105"
             }`}
           >
-            Confirm
+            {busy ? "Working..." : confirmLabel}
           </button>
         </div>
       </div>

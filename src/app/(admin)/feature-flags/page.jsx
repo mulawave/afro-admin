@@ -14,8 +14,8 @@ export default function FeatureFlagsPage() {
   const loadFlags = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/flags");
-      setFlags(Array.isArray(res) ? res : res.data ?? []);
+      const res = await api.get("/admin/features");
+      setFlags(res.flags ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load feature flags");
@@ -37,9 +37,7 @@ export default function FeatureFlagsPage() {
       action: async () => {
         setToggling(flag.key);
         try {
-          await api.patch(`/admin/flags/${flag.key}`, {
-            enabled: !flag.enabled,
-          });
+          await api.post("/admin/features", { key: flag.key, enabled: !flag.enabled });
           await loadFlags();
         } catch {
           // handled by api
@@ -53,7 +51,7 @@ export default function FeatureFlagsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--av-light-orange)]" />
       </div>
     );
   }
@@ -61,8 +59,8 @@ export default function FeatureFlagsPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <h1 className="text-3xl font-semibold text-white">Feature Flags</h1>
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={loadFlags} className="ml-3 underline">Retry</button>
         </div>
@@ -75,39 +73,42 @@ export default function FeatureFlagsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
-        <span className="text-sm text-gray-500">
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Feature Flags</h1>
+          <p className="mt-2 text-sm text-white/58">Roll out or disable platform capabilities instantly across the stack.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
           {enabledCount}/{flags.length} enabled
         </span>
       </div>
 
       {flags.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400">
+        <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-8 text-center text-white/40 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
           No feature flags configured
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
+        <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
           {flags.map((flag) => (
             <div
               key={flag.key}
-              className="flex items-center justify-between px-5 py-4"
+              className="flex items-center justify-between border-b border-white/6 px-5 py-4 last:border-b-0"
             >
               <div>
-                <div className="text-sm font-medium text-gray-900">{flag.key}</div>
+                <div className="text-sm font-medium text-white">{flag.key}</div>
                 {flag.description && (
-                  <div className="text-xs text-gray-500 mt-0.5">{flag.description}</div>
+                  <div className="mt-0.5 text-xs text-white/45">{flag.description}</div>
                 )}
               </div>
 
               <div className="flex items-center gap-3">
                 {toggling === flag.key && (
-                  <span className="text-xs text-gray-400">Updating...</span>
+                  <span className="text-xs text-white/42">Updating...</span>
                 )}
                 <button
                   onClick={() => toggleFlag(flag)}
                   disabled={toggling === flag.key}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
-                    flag.enabled ? "bg-blue-600" : "bg-gray-300"
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                    flag.enabled ? "bg-[var(--av-orange)]" : "bg-white/18"
                   }`}
                   role="switch"
                   aria-checked={flag.enabled}
@@ -124,8 +125,7 @@ export default function FeatureFlagsPage() {
         </div>
       )}
 
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
+      <div className="rounded-[1.5rem] border border-[var(--av-light-orange)]/20 bg-[rgba(245,193,108,0.08)] px-4 py-3 text-sm text-white/72">
         Flag changes apply instantly and are logged to the audit trail.
       </div>
 

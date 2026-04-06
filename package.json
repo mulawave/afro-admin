@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "test": "node scripts/verify-step3.mjs"
+    "dev": "node scripts/run-next.mjs dev --port 3001",
+    "build": "node scripts/run-next.mjs build",
+    "start": "node scripts/run-next.mjs start --port 3001",
+    "lint": "node ./node_modules/next/dist/bin/next lint",
+    "test": "node scripts/verify-step3.mjs",
+    "smoke": "node scripts/smoke-admin-http.mjs"
   },
   "dependencies": {
+    "get-proto": "^1.0.1",
     "next": "15.2.4",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -21,5 +23,8 @@
     "eslint-config-next": "15.2.4",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2"
+  },
+  "optionalDependencies": {
+    "lightningcss-win32-x64-msvc": "^1.32.0"
   }
 }

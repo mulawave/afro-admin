@@ -11,37 +11,27 @@ export default function WalletCard({ wallet, user, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  function requestAdjust(type) {
+  function requestAdjust() {
     const parsed = parseFloat(amount);
     if (!parsed || parsed <= 0) {
       setError("Enter a valid positive amount");
       return;
     }
 
-    const adjustAmount = type === "add" ? parsed : -parsed;
-    const label = type === "add" ? "Add" : "Remove";
     const currencyLabel = currency === "ngn" ? "₦" : "vPT";
-
-    // Safety: prevent negative balance on removal
-    if (type === "remove") {
-      const current = currency === "ngn" ? wallet.ngn_balance : wallet.vpt_units;
-      if (parsed > current) {
-        setError(`Cannot remove more than current balance (${currencyLabel}${Number(current).toLocaleString("en-NG")})`);
-        return;
-      }
-    }
 
     setError(null);
     setConfirm({
-      title: `${label} ${currencyLabel}${parsed.toLocaleString("en-NG")}`,
-      message: `${label} ${currencyLabel}${parsed.toLocaleString("en-NG")} ${type === "add" ? "to" : "from"} ${user.email}'s ${currency.toUpperCase()} balance? This action will be recorded in the ledger.`,
+      title: `Fund ${currencyLabel}${parsed.toLocaleString("en-NG")}`,
+      message: `Credit ${currencyLabel}${parsed.toLocaleString("en-NG")} to ${user.email}'s ${currency.toUpperCase()} balance? This action will be written to the ledger.`,
       action: async () => {
         setLoading(true);
         try {
-          await api.post("/admin/wallet/adjust", {
-            uid: user.uid,
-            currency,
-            amount: adjustAmount,
+          await api.post("/withdrawals/fund", {
+            uid: user.id ?? user.uid,
+            ...(currency === "ngn"
+              ? { amount_ngn: parsed }
+              : { amount_vpt_units: parsed }),
           });
           setAmount("");
           setError(null);
@@ -57,34 +47,45 @@ export default function WalletCard({ wallet, user, onUpdate }) {
 
   return (
     <>
-      <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Wallet</h3>
+      <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/78">Wallet</h3>
+            <p className="mt-1 text-xs text-white/46">Gift wallet balances plus linked BSC address.</p>
+          </div>
+          <div className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/55">
+            {wallet.wallet_status || "not_created"}
+          </div>
+        </div>
 
-        {/* Balances */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <p className="text-xs text-green-600 font-medium">NGN Balance</p>
-            <p className="text-lg font-bold text-green-800">
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+            <p className="text-xs font-medium text-emerald-200">NGN Balance</p>
+            <p className="text-lg font-bold text-white">
               ₦{typeof wallet.ngn_balance === "number" ? wallet.ngn_balance.toLocaleString("en-NG") : "—"}
             </p>
           </div>
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <p className="text-xs text-purple-600 font-medium">vPT Units</p>
-            <p className="text-lg font-bold text-purple-800">
+          <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-3">
+            <p className="text-xs font-medium text-indigo-200">vPT Units</p>
+            <p className="text-lg font-bold text-white">
               {typeof wallet.vpt_units === "number" ? wallet.vpt_units.toLocaleString("en-NG") : "—"}
             </p>
           </div>
         </div>
 
-        {/* Adjustment Controls */}
-        <div className="border-t border-gray-200 pt-3 space-y-3">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Balance Adjustment</p>
+        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-white/42">BSC Address</p>
+          <p className="mt-2 break-all font-mono text-sm text-white/76">{wallet.bsc_address || "Not created yet"}</p>
+        </div>
+
+        <div className="space-y-3 border-t border-white/8 pt-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-white/46">Fund Balance</p>
 
           <div className="flex gap-2">
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none"
             >
               <option value="ngn">NGN (₦)</option>
               <option value="vpt">vPT</option>
@@ -100,30 +101,24 @@ export default function WalletCard({ wallet, user, onUpdate }) {
                 setAmount(e.target.value);
                 setError(null);
               }}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
             />
           </div>
 
           {error && (
-            <p className="text-xs text-red-600">{error}</p>
+            <p className="text-xs text-red-200">{error}</p>
           )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => requestAdjust("add")}
-              disabled={loading || !amount}
-              className="flex-1 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
-            >
-              + Add
-            </button>
-            <button
-              onClick={() => requestAdjust("remove")}
-              disabled={loading || !amount}
-              className="flex-1 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-            >
-              − Remove
-            </button>
-          </div>
+          <button
+            onClick={requestAdjust}
+            disabled={loading || !amount}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-2 text-sm font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105 disabled:opacity-50"
+          >
+            {loading && <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--av-dark-blue)]/30 border-t-[var(--av-dark-blue)]/80" />}
+            {loading ? "Funding..." : "Credit Wallet"}
+          </button>
+
+          <p className="text-xs text-white/38">Balance removal is intentionally excluded here. Use ledger reversals for auditable corrections.</p>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ export default function AuditPage() {
     try {
       setLoading(true);
       const res = await api.get("/admin/audit");
-      setLogs(Array.isArray(res) ? res : res.data ?? []);
+      setLogs(res.logs ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load audit logs");
@@ -34,11 +34,7 @@ export default function AuditPage() {
     if (filterAction && l.action !== filterAction) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      (l.action && l.action.toLowerCase().includes(q)) ||
-      (l.performed_by && l.performed_by.toLowerCase().includes(q)) ||
-      (l.target_id && l.target_id.toLowerCase().includes(q))
-    );
+    return buildSearchText(l).includes(q);
   });
 
   const columns = [
@@ -46,58 +42,61 @@ export default function AuditPage() {
       key: "action",
       label: "Action",
       render: (row) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-mono font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/6 px-2.5 py-1 text-xs font-mono font-medium text-white/82">
           {row.action}
         </span>
       ),
     },
-    { key: "performed_by", label: "Admin" },
-    { key: "target_id", label: "Target" },
+    {
+      key: "admin",
+      label: "Admin",
+      render: (row) => <EntityCell entity={row.admin} fallback={row.admin_uid} />,
+    },
+    {
+      key: "target",
+      label: "Target",
+      render: (row) => <EntityCell entity={row.target} fallback={row.target_id} />,
+    },
     {
       key: "meta",
       label: "Details",
-      render: (row) =>
-        row.meta && Object.keys(row.meta).length > 0 ? (
-          <span className="text-xs text-gray-500 font-mono truncate max-w-xs block">
-            {JSON.stringify(row.meta)}
-          </span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        ),
+      render: (row) => <AuditMetaCell meta={row.meta} />,
     },
     {
       key: "created_at",
       label: "Date",
       render: (row) => (
-        <span className="text-xs text-gray-500 whitespace-nowrap">
-          {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
+        <span className="whitespace-nowrap text-xs text-white/55">
+          {row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}
         </span>
       ),
     },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Audit Logs</h1>
-        <span className="text-sm text-gray-500">
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Audit Logs</h1>
+          <p className="mt-2 text-sm text-white/58">Immutable records for sensitive operator actions across the platform.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
           {filtered.length} entr{filtered.length !== 1 ? "ies" : "y"}
         </span>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl md:flex-row">
         <input
           type="text"
           placeholder="Search by action, admin, or target..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="flex-1 rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
         />
         <select
           value={filterAction}
           onChange={(e) => setFilterAction(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="rounded-2xl border border-white/10 bg-white/6 px-3 py-3 text-sm text-white outline-none"
         >
           <option value="">All Actions</option>
           {actions.map((a) => (
@@ -106,36 +105,91 @@ export default function AuditPage() {
         </select>
       </div>
 
-      {/* Error */}
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={loadLogs} className="ml-3 underline">Retry</button>
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
         </div>
       )}
 
-      {/* Table */}
       {!loading && !error && (
-        <div className="bg-white rounded-lg shadow">
-          <DataTable
-            columns={columns}
-            rows={filtered}
-            emptyMessage="No audit logs found"
-          />
-        </div>
+        <DataTable columns={columns} rows={filtered} emptyMessage="No audit logs found" />
       )}
 
-      {/* Info */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600">
+      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
         Audit logs are immutable. Every admin action is recorded automatically.
       </div>
     </div>
   );
+}
+
+function buildSearchText(log) {
+  return [
+    log.action,
+    log.admin?.display_name,
+    log.admin?.email,
+    log.admin_uid,
+    log.target?.display_name,
+    log.target?.owner_display_name,
+    log.target?.id,
+    log.target_id,
+    JSON.stringify(log.meta || {}),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function EntityCell({ entity, fallback }) {
+  const displayName = entity?.display_name || fallback || "—";
+  const secondary = entity?.email || entity?.owner_display_name || entity?.id || null;
+
+  return (
+    <div className="space-y-0.5">
+      <p className="font-medium text-white">{displayName}</p>
+      <p className="text-xs text-white/42">{secondary && secondary !== displayName ? secondary : "—"}</p>
+    </div>
+  );
+}
+
+function AuditMetaCell({ meta }) {
+  const entries = Object.entries(meta || {}).filter(([, value]) => value !== undefined && value !== null && value !== "");
+
+  if (!entries.length) {
+    return <span className="text-white/38">—</span>;
+  }
+
+  return (
+    <div className="max-w-sm space-y-1">
+      {entries.slice(0, 4).map(([key, value]) => (
+        <div key={key} className="flex items-start justify-between gap-3 text-xs">
+          <span className="text-white/42">{formatMetaKey(key)}</span>
+          <span className="max-w-[12rem] text-right text-white/72">{formatMetaValue(value)}</span>
+        </div>
+      ))}
+      {entries.length > 4 ? <p className="text-[11px] text-white/36">+{entries.length - 4} more fields</p> : null}
+    </div>
+  );
+}
+
+function formatMetaKey(key) {
+  return key.replace(/_details$/, "").replace(/_/g, " ");
+}
+
+function formatMetaValue(value) {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return value.toLocaleString("en-NG");
+  if (typeof value === "string") return value;
+
+  if (value && typeof value === "object") {
+    return value.display_name || value.email || value.label || value.id || JSON.stringify(value);
+  }
+
+  return "—";
 }

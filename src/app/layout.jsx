@@ -1,4 +1,6 @@
 import "./globals.css";
+import InteractionFeedbackProvider from "@/components/providers/InteractionFeedbackProvider";
+import BrandingHead from "@/components/BrandingHead";
 
 export const metadata = {
   title: "AfroVision Admin",
@@ -8,7 +10,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <BrandingHead />
+        <InteractionFeedbackProvider />
+        {children}
+      </body>
     </html>
   );
 }

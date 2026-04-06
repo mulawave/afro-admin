@@ -49,9 +49,9 @@ export default function GiftForm({ gift, onClose }) {
     setError(null);
     try {
       if (isNew) {
-        await api.post("/admin/gifts", payload);
+        await api.post("/interactions/gifts", payload);
       } else {
-        await api.patch(`/admin/gifts/${gift.id}`, payload);
+        await api.patch(`/interactions/gifts/${gift.id}`, payload);
       }
       onClose();
     } catch (err) {
@@ -68,16 +68,14 @@ export default function GiftForm({ gift, onClose }) {
       title={isNew ? "Add Gift" : `Edit "${gift.name}"`}
     >
       <div className="space-y-4">
-        {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+          <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
-        {/* Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-white/72">
             Name
           </label>
           <input
@@ -85,13 +83,12 @@ export default function GiftForm({ gift, onClose }) {
             value={form.name}
             onChange={(e) => update("name", e.target.value)}
             placeholder="e.g. Star Gift"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
           />
         </div>
 
-        {/* Icon */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-white/72">
             Icon (emoji)
           </label>
           <input
@@ -99,19 +96,18 @@ export default function GiftForm({ gift, onClose }) {
             value={form.icon}
             onChange={(e) => update("icon", e.target.value)}
             placeholder="e.g. ⭐"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
           />
         </div>
 
-        {/* Currency */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-white/72">
             Currency
           </label>
           <select
             value={form.currency}
             onChange={(e) => update("currency", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none"
           >
             <option value="vpt">vPT (tokens)</option>
             <option value="ngn">NGN (naira)</option>
@@ -121,7 +117,7 @@ export default function GiftForm({ gift, onClose }) {
         {/* Value */}
         {form.currency === "vpt" ? (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="mb-1 block text-sm font-medium text-white/72">
               vPT Units
             </label>
             <input
@@ -130,12 +126,12 @@ export default function GiftForm({ gift, onClose }) {
               value={form.vpt_units}
               onChange={(e) => update("vpt_units", e.target.value)}
               placeholder="e.g. 100"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
             />
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="mb-1 block text-sm font-medium text-white/72">
               Naira Value (₦)
             </label>
             <input
@@ -144,23 +140,22 @@ export default function GiftForm({ gift, onClose }) {
               value={form.naira_value}
               onChange={(e) => update("naira_value", e.target.value)}
               placeholder="e.g. 500"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
             />
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+        <div className="flex justify-end gap-3 border-t border-white/8 pt-4">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-white/78 transition-colors hover:bg-white/10"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-4 py-2 text-sm font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105 disabled:opacity-50"
           >
             {saving ? "Saving..." : isNew ? "Create Gift" : "Save Changes"}
           </button>

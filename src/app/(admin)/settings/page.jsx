@@ -15,7 +15,7 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       const res = await api.get("/admin/settings");
-      setSettings(res.data ?? res);
+      setSettings(res.settings ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load settings");
@@ -36,7 +36,7 @@ export default function SettingsPage() {
       action: async () => {
         setSaving(key);
         try {
-          await api.patch("/admin/settings", { key, value });
+          await api.patch(`/admin/settings/${key}`, { value });
           await load();
         } catch {
           // handled by api
@@ -50,50 +50,64 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+        <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+      <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
         {error}
         <button onClick={load} className="ml-3 underline">Retry</button>
       </div>
     );
   }
 
-  const entries = settings ? Object.entries(settings) : [];
+  const grouped = (settings || []).reduce((accumulator, setting) => {
+    const groupKey = setting.category_label || setting.category || "Other";
+    accumulator[groupKey] = accumulator[groupKey] || [];
+    accumulator[groupKey].push(setting);
+    return accumulator;
+  }, {});
+  const groups = Object.entries(grouped);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
-        <span className="text-sm text-gray-500">
-          {entries.length} setting{entries.length !== 1 ? "s" : ""}
+        <div>
+          <h1 className="text-3xl font-semibold text-white">System Settings</h1>
+          <p className="mt-2 text-sm text-white/58">Firetore-backed platform settings spanning blockchain, rates, and runtime configuration.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
+          {settings.length} setting{settings.length !== 1 ? "s" : ""}
         </span>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-400">
+      {settings.length === 0 ? (
+        <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-8 text-center text-white/40 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
           No settings configured
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
-          {entries.map(([key, value]) => (
-            <SettingRow
-              key={key}
-              settingKey={key}
-              value={value}
-              saving={saving === key}
-              onSave={(v) => requestSave(key, v)}
-            />
-          ))}
-        </div>
+        groups.map(([group, entries]) => (
+          <div key={group} className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="border-b border-white/8 px-5 py-4">
+              <h2 className="text-lg font-semibold text-white">{group}</h2>
+            </div>
+            <div className="divide-y divide-white/6">
+              {entries.map((setting) => (
+                <SettingRow
+                  key={setting.key}
+                  setting={setting}
+                  saving={saving === setting.key}
+                  onSave={(value) => requestSave(setting.key, value)}
+                />
+              ))}
+            </div>
+          </div>
+        ))
       )}
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title || ""}
@@ -109,7 +123,9 @@ export default function SettingsPage() {
   );
 }
 
-function SettingRow({ settingKey, value, saving, onSave }) {
+function SettingRow({ setting, saving, onSave }) {
+  const settingKey = setting.key;
+  const value = setting.value;
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(value ?? ""));
 
@@ -128,42 +144,43 @@ function SettingRow({ settingKey, value, saving, onSave }) {
   }
 
   return (
-    <div className="flex items-center justify-between px-5 py-3">
+    <div className="flex flex-col justify-between gap-4 px-5 py-4 lg:flex-row lg:items-center">
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-gray-900">{formatKey(settingKey)}</div>
-        <div className="text-xs text-gray-400 font-mono">{settingKey}</div>
+        <div className="text-sm font-medium text-white">{formatKey(settingKey)}</div>
+        <div className="mt-1 text-xs font-mono text-white/38">{settingKey}</div>
+        {setting.description ? <div className="mt-2 text-sm text-white/55">{setting.description}</div> : null}
       </div>
       {editing ? (
         <div className="flex items-center gap-2 ml-4">
           <input
-            type="text"
+            type={setting.is_secret ? "password" : "text"}
             value={val}
             onChange={(e) => setVal(e.target.value)}
-            className="w-56 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-64 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none"
             autoFocus
           />
           <button
             onClick={handleSave}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+            className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-2 text-xs font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105"
           >
             Save
           </button>
           <button
             onClick={handleCancel}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+            className="rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-xs font-medium text-white/75 transition hover:bg-white/10"
           >
             Cancel
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2 ml-4">
-          <span className="text-sm text-gray-700 font-mono truncate max-w-xs">
-            {renderValue(value)}
+          <span className="max-w-xs truncate font-mono text-sm text-white/78">
+            {renderValue(value, setting.is_secret)}
           </span>
           <button
             onClick={() => { setVal(String(value ?? "")); setEditing(true); }}
             disabled={saving}
-            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            className="px-3 py-1.5 text-xs font-medium text-[var(--av-light-orange)] hover:text-white disabled:opacity-50"
           >
             {saving ? "Saving..." : "Edit"}
           </button>
@@ -179,7 +196,8 @@ function formatKey(key) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function renderValue(value) {
+function renderValue(value, isSecret) {
+  if (isSecret) return value ? "Configured" : "Not set";
   if (value === true) return "✓ Enabled";
   if (value === false) return "✗ Disabled";
   if (value === null || value === undefined) return "—";

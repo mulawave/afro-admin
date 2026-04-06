@@ -6,6 +6,7 @@ import DataTable from "@/components/ui/DataTable";
 import StatusBadge from "@/components/ui/StatusBadge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import GiftForm from "@/components/gifts/GiftForm";
+import NoticeBanner from "@/components/ui/NoticeBanner";
 
 export default function GiftsPage() {
   const [gifts, setGifts] = useState([]);
@@ -15,12 +16,13 @@ export default function GiftsPage() {
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   const loadGifts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/gifts");
-      setGifts(Array.isArray(res) ? res : res.data ?? []);
+      const res = await api.get("/interactions/gifts/all");
+      setGifts(res.gifts ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load gifts");
@@ -43,15 +45,48 @@ export default function GiftsPage() {
           : "This gift will become available to users."
       }`,
       destructive: gift.is_active,
+      busy: false,
+      error: null,
+      confirmLabel: action,
       action: async () => {
+        setConfirm((current) => ({ ...current, busy: true, error: null }));
         setActionLoading(true);
         try {
-          await api.patch(`/admin/gifts/${gift.id}`, {
+          await api.patch(`/interactions/gifts/${gift.id}`, {
             is_active: !gift.is_active,
           });
+          setFeedback({ tone: "success", message: `${action}d ${gift.name}.` });
           await loadGifts();
-        } catch {
-          // handled by api
+          return true;
+        } catch (err) {
+          setConfirm((current) => ({ ...current, busy: false, error: err.message || `Failed to ${action.toLowerCase()} gift` }));
+          return false;
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
+  function deleteGift(gift) {
+    setConfirm({
+      title: "Delete Gift",
+      message: `Permanently delete "${gift.name}" from the gift catalog? This cannot be undone.`,
+      destructive: true,
+      busy: false,
+      error: null,
+      confirmLabel: "Delete Gift",
+      action: async () => {
+        setConfirm((current) => ({ ...current, busy: true, error: null }));
+        setActionLoading(true);
+        try {
+          await api.delete(`/interactions/gifts/${gift.id}`);
+          setFeedback({ tone: "success", message: `Deleted ${gift.name}.` });
+          await loadGifts();
+          return true;
+        } catch (err) {
+          setConfirm((current) => ({ ...current, busy: false, error: err.message || "Failed to delete gift" }));
+          return false;
         } finally {
           setActionLoading(false);
         }
@@ -87,7 +122,7 @@ export default function GiftsPage() {
       key: "currency",
       label: "Currency",
       render: (row) => (
-        <span className="uppercase text-xs font-medium text-gray-500">
+        <span className="text-xs font-medium uppercase text-white/52">
           {row.currency || "—"}
         </span>
       ),
@@ -106,7 +141,7 @@ export default function GiftsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setEditing(row)}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            className="text-sm font-medium text-sky-300 hover:text-sky-200"
           >
             Edit
           </button>
@@ -114,11 +149,17 @@ export default function GiftsPage() {
             onClick={() => toggleGift(row)}
             className={`text-sm font-medium ${
               row.is_active
-                ? "text-amber-600 hover:text-amber-800"
-                : "text-green-600 hover:text-green-800"
+                ? "text-amber-300 hover:text-amber-200"
+                : "text-emerald-300 hover:text-emerald-200"
             }`}
           >
             {row.is_active ? "Disable" : "Enable"}
+          </button>
+          <button
+            onClick={() => deleteGift(row)}
+            className="text-sm font-medium text-red-300 hover:text-red-200"
+          >
+            Delete
           </button>
         </div>
       ),
@@ -126,36 +167,39 @@ export default function GiftsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Gifts</h1>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Gifts</h1>
+          <p className="mt-2 text-sm text-white/58">Manage the interactive gift catalog used across live channels and streams.</p>
+        </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">
+          <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
             {filtered.length} gift{filtered.length !== 1 ? "s" : ""}
           </span>
           <button
             onClick={() => setEditing({})}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-4 py-2 text-sm font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105"
           >
             + Add Gift
           </button>
         </div>
       </div>
 
-      {/* Search */}
-      <div>
+      <NoticeBanner tone={feedback?.tone} message={feedback?.message} />
+
+      <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <input
           type="text"
           placeholder="Search gifts by name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full max-w-md rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
         />
       </div>
 
-      {/* Error */}
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={loadGifts} className="ml-3 underline">
             Retry
@@ -163,25 +207,16 @@ export default function GiftsPage() {
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
         </div>
       )}
 
-      {/* Table */}
       {!loading && !error && (
-        <div className="bg-white rounded-lg shadow">
-          <DataTable
-            columns={columns}
-            rows={filtered}
-            emptyMessage="No gifts found"
-          />
-        </div>
+        <DataTable columns={columns} rows={filtered} emptyMessage="No gifts found" />
       )}
 
-      {/* Gift Form Drawer */}
       {editing !== null && (
         <GiftForm
           gift={editing}
@@ -192,16 +227,24 @@ export default function GiftsPage() {
         />
       )}
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title || ""}
         message={confirm?.message || ""}
         destructive={confirm?.destructive}
+        busy={confirm?.busy}
+        error={confirm?.error}
+        confirmLabel={confirm?.confirmLabel}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
-          if (confirm?.action) await confirm.action();
-          setConfirm(null);
+          if (!confirm?.action) {
+            setConfirm(null);
+            return;
+          }
+          const shouldClose = await confirm.action();
+          if (shouldClose !== false) {
+            setConfirm(null);
+          }
         }}
       />
     </div>

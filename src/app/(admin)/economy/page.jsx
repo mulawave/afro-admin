@@ -14,8 +14,30 @@ export default function EconomyPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/economy");
-      setData(res.data ?? res);
+      const [settingsRes, totalsRes, queueRes] = await Promise.all([
+        api.get("/admin/settings"),
+        api.get("/withdrawals/admin/system-totals"),
+        api.get("/vpt/admin/stats"),
+      ]);
+
+      const settingsMap = (settingsRes.settings ?? []).reduce((accumulator, setting) => {
+        accumulator[setting.key] = setting.value;
+        return accumulator;
+      }, {});
+
+      setData({
+        ...settingsMap,
+        pools: {
+          operations_ngn: totalsRes.pools?.operations?.naira ?? 0,
+          community_ngn: totalsRes.pools?.community?.naira ?? 0,
+          operations_vpt: totalsRes.pools?.operations?.vpt_units ?? 0,
+          community_vpt: totalsRes.pools?.community?.vpt_units ?? 0,
+        },
+        pending_withdrawals: totalsRes.pending_withdrawals ?? { count: 0, total_amount: 0 },
+        ledger: totalsRes.ledger ?? {},
+        queue: queueRes.stats?.queue ?? {},
+        batches: queueRes.stats?.batches ?? {},
+      });
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load economy data");
@@ -36,7 +58,7 @@ export default function EconomyPage() {
       action: async () => {
         setSaving(key);
         try {
-          await api.patch("/admin/economy", { key, value });
+          await api.patch(`/admin/settings/${key}`, { value });
           await load();
         } catch {
           // handled by api
@@ -50,14 +72,14 @@ export default function EconomyPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+        <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+      <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
         {error}
         <button onClick={load} className="ml-3 underline">Retry</button>
       </div>
@@ -67,14 +89,22 @@ export default function EconomyPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Economy Control</h1>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Economy Control</h1>
+          <p className="mt-2 text-sm text-white/58">Tune economic ratios, inspect pool balances, and watch distribution queues.</p>
+        </div>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs text-gray-500">Live</span>
+          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          <span className="text-xs text-white/45">Live</span>
         </div>
       </div>
 
-      {/* Rates */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricCard label="Pending Queue" value={data?.queue?.pending} />
+        <MetricCard label="Batches Failed" value={data?.batches?.failed} accent="amber" />
+        <MetricCard label="Pending Withdrawals" value={data?.pending_withdrawals?.count} accent="green" />
+      </div>
+
       <Section title="Exchange Rates">
         <EditableField
           label="VPT Price (₦)"
@@ -92,14 +122,12 @@ export default function EconomyPage() {
         />
       </Section>
 
-      {/* Split Rules */}
       <SplitSection
         data={data}
         saving={saving}
         onUpdate={requestUpdate}
       />
 
-      {/* Pools */}
       <Section title="Pool Balances">
         <div className="grid grid-cols-2 gap-4">
           <PoolTile label="Operations NGN" value={data?.pools?.operations_ngn} color="blue" />
@@ -109,7 +137,14 @@ export default function EconomyPage() {
         </div>
       </Section>
 
-      {/* Confirm Dialog */}
+      <Section title="Settlement Snapshot">
+        <div className="space-y-3">
+          <SettlementRow label="Pending withdrawal value" value={`₦${Number(data?.pending_withdrawals?.total_amount || 0).toLocaleString("en-NG")}`} />
+          <SettlementRow label="Total plan revenue" value={`₦${Number(data?.ledger?.total_ngn_in || 0).toLocaleString("en-NG")}`} />
+          <SettlementRow label="Total vPT distributed" value={Number(data?.ledger?.total_vpt_distributed || 0).toLocaleString("en-NG")} />
+        </div>
+      </Section>
+
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title || ""}
@@ -126,40 +161,40 @@ export default function EconomyPage() {
 }
 
 function SplitSection({ data, saving, onUpdate }) {
-  const creator = data?.SPLIT_CREATOR ?? 0;
-  const ops = data?.SPLIT_OPS ?? 0;
-  const community = data?.SPLIT_COMMUNITY ?? 0;
-  const total = creator + ops + community;
+  const community = Number(data?.COMMUNITY_POOL_PERCENT ?? 0);
+  const extraction = Number(data?.VPT_EXTRACTION_PERCENT ?? 0);
+  const operations = Math.max(0, 100 - community);
+  const total = community + operations;
   const isValid = total === 100;
 
   return (
     <Section title="Split Rules">
       <div className="space-y-3">
         <EditableField
-          label="Creator %"
-          value={creator}
-          saving={saving === "SPLIT_CREATOR"}
-          onSave={(v) => onUpdate("SPLIT_CREATOR", +v, "Creator %")}
-          type="number"
-        />
-        <EditableField
-          label="Operations %"
-          value={ops}
-          saving={saving === "SPLIT_OPS"}
-          onSave={(v) => onUpdate("SPLIT_OPS", +v, "Operations %")}
-          type="number"
-        />
-        <EditableField
-          label="Community %"
+          label="Community Pool %"
           value={community}
-          saving={saving === "SPLIT_COMMUNITY"}
-          onSave={(v) => onUpdate("SPLIT_COMMUNITY", +v, "Community %")}
+          saving={saving === "COMMUNITY_POOL_PERCENT"}
+          onSave={(v) => onUpdate("COMMUNITY_POOL_PERCENT", +v, "Community Pool %")}
           type="number"
         />
-        <div className={`text-sm font-medium mt-2 px-3 py-2 rounded ${
-          isValid ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+        <EditableField
+          label="Operations % (derived)"
+          value={operations}
+          saving={false}
+          readOnly
+          type="number"
+        />
+        <EditableField
+          label="vPT Extraction %"
+          value={extraction}
+          saving={saving === "VPT_EXTRACTION_PERCENT"}
+          onSave={(v) => onUpdate("VPT_EXTRACTION_PERCENT", +v, "vPT Extraction %")}
+          type="number"
+        />
+        <div className={`mt-2 rounded-2xl px-3 py-2 text-sm font-medium ${
+          isValid ? "bg-emerald-500/10 text-emerald-200" : "bg-red-500/10 text-red-200"
         }`}>
-          Total: {total}% {isValid ? "✓" : "⚠ Must equal 100%"}
+          Community + operations = {total}% {isValid ? "✓" : "⚠ review settings"}
         </div>
       </div>
     </Section>
@@ -168,18 +203,19 @@ function SplitSection({ data, saving, onUpdate }) {
 
 function Section({ title, children }) {
   return (
-    <div className="bg-white rounded-lg shadow p-5">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">{title}</h2>
+    <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+      <h2 className="mb-4 text-lg font-semibold text-white">{title}</h2>
       {children}
     </div>
   );
 }
 
-function EditableField({ label, value, onSave, saving, type = "text" }) {
+function EditableField({ label, value, onSave, saving, type = "text", readOnly = false }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(value ?? ""));
 
   function handleSave() {
+    if (readOnly) return;
     if (val === String(value)) {
       setEditing(false);
       return;
@@ -194,39 +230,39 @@ function EditableField({ label, value, onSave, saving, type = "text" }) {
   }
 
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-      <span className="text-sm font-medium text-gray-700 w-48">{label}</span>
+    <div className="flex items-center justify-between border-b border-white/8 py-2 last:border-b-0">
+      <span className="w-48 text-sm font-medium text-white/72">{label}</span>
       {editing ? (
         <div className="flex items-center gap-2">
           <input
             type={type}
             value={val}
             onChange={(e) => setVal(e.target.value)}
-            className="w-40 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-40 rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-white outline-none"
             autoFocus
           />
           <button
             onClick={handleSave}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+            className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-1.5 text-xs font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105"
           >
             Save
           </button>
           <button
             onClick={handleCancel}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+            className="rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-xs font-medium text-white/75 transition hover:bg-white/10"
           >
             Cancel
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-900 font-mono">{value ?? "—"}</span>
+          <span className="font-mono text-sm text-white">{value ?? "—"}</span>
           <button
-            onClick={() => { setVal(String(value ?? "")); setEditing(true); }}
-            disabled={saving}
-            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            onClick={() => { if (!readOnly) { setVal(String(value ?? "")); setEditing(true); } }}
+            disabled={saving || readOnly}
+            className="px-3 py-1.5 text-xs font-medium text-[var(--av-light-orange)] hover:text-white disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Edit"}
+            {readOnly ? "Derived" : saving ? "Saving..." : "Edit"}
           </button>
         </div>
       )}
@@ -236,18 +272,42 @@ function EditableField({ label, value, onSave, saving, type = "text" }) {
 
 function PoolTile({ label, value, color }) {
   const colors = {
-    blue: "bg-blue-50 border-blue-200 text-blue-700",
-    green: "bg-green-50 border-green-200 text-green-700",
-    purple: "bg-purple-50 border-purple-200 text-purple-700",
-    amber: "bg-amber-50 border-amber-200 text-amber-700",
+    blue: "bg-sky-500/8 border-sky-300/18 text-sky-100",
+    green: "bg-emerald-500/8 border-emerald-300/18 text-emerald-100",
+    purple: "bg-indigo-500/8 border-indigo-300/18 text-indigo-100",
+    amber: "bg-amber-500/8 border-amber-300/18 text-amber-100",
   };
 
   return (
     <div className={`rounded-lg border p-4 ${colors[color] || colors.blue}`}>
       <div className="text-xs font-medium opacity-75">{label}</div>
-      <div className="text-xl font-bold mt-1">
+      <div className="mt-1 text-xl font-bold">
         {typeof value === "number" ? value.toLocaleString() : value ?? "—"}
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, accent = "blue" }) {
+  const accents = {
+    blue: "from-sky-400/18 to-sky-500/4 border-sky-300/18",
+    green: "from-emerald-400/18 to-emerald-500/4 border-emerald-300/18",
+    amber: "from-amber-300/24 to-orange-400/6 border-amber-200/22",
+  };
+
+  return (
+    <div className={`rounded-[1.75rem] border bg-gradient-to-br p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)] ${accents[accent] || accents.blue}`}>
+      <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-white">{value ?? 0}</p>
+    </div>
+  );
+}
+
+function SettlementRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+      <span className="text-sm text-white/58">{label}</span>
+      <span className="text-sm font-semibold text-white">{value}</span>
     </div>
   );
 }

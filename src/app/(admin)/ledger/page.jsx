@@ -12,8 +12,8 @@ export default function LedgerPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/ledger");
-      setData(Array.isArray(res) ? res : res.data ?? []);
+      const res = await api.get("/vpt/admin/ledger");
+      setData(res.ledger ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load ledger");
@@ -27,14 +27,17 @@ export default function LedgerPage() {
   }, [load]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Global Ledger</h1>
-        <span className="text-sm text-gray-500">{data.length} entries</span>
+        <div>
+          <h1 className="text-3xl font-semibold text-white">Global Ledger</h1>
+          <p className="mt-2 text-sm text-white/58">Inspect system-wide financial events, distributions, and administrative funding actions.</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">{data.length} entries</span>
       </div>
 
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="rounded-[1.5rem] border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
           <button onClick={load} className="ml-3 underline">Retry</button>
         </div>
@@ -42,12 +45,12 @@ export default function LedgerPage() {
 
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[var(--av-light-orange)]" />
         </div>
       )}
 
       {!loading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
           <LedgerTable data={data} showUser />
         </div>
       )}
