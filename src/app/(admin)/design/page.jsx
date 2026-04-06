@@ -285,8 +285,10 @@ export default function DesignPage() {
     loadData();
   }, [loadData]);
 
+  const SECTION_GRID_KEYS = new Set(["hero", "featured_channels", "live_now", "upcoming_shows", "challenge", "updates"]);
   const orderedSections = design
     ? Object.entries(design)
+        .filter(([key]) => SECTION_GRID_KEYS.has(key))
         .map(([key, section]) => ({ key, section }))
         .sort((left, right) => (left.section.sort_order || 0) - (right.section.sort_order || 0))
     : [];
