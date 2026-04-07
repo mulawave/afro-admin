@@ -1,28 +1,81 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { api } from "@/lib/api";
 import Drawer from "@/components/ui/Drawer";
+
+const EMOJI_GRID = [
+  "⭐", "🌟", "💫", "✨", "🔥", "💎", "👑", "🏆",
+  "🎁", "🎀", "🎉", "🎊", "🎯", "🚀", "💖", "❤️",
+  "💙", "💜", "💛", "🧡", "🤍", "💕", "💗", "💝",
+  "🌹", "🌸", "🌺", "🌻", "🦋", "🦄", "🐉", "🦅",
+  "🍀", "🎵", "🎶", "🎤", "🎬", "📺", "🎮", "🎲",
+  "🍕", "🍔", "🍟", "🍣", "🍩", "🍰", "🧁", "🍫",
+  "☕", "🍷", "🥂", "🍺", "🥤", "🧃", "🍹", "🧋",
+  "🏅", "🥇", "🥈", "🥉", "🎖️", "🏵️", "💰", "💵",
+  "💸", "💳", "🪙", "🔑", "🗝️", "🛡️", "⚔️", "🏹",
+  "🎭", "🎨", "🖌️", "🎻", "🥁", "🎺", "🎸", "🎹",
+];
 
 export default function GiftForm({ gift, onClose }) {
   const isNew = !gift.id;
   const [form, setForm] = useState({
     name: gift.name || "",
     icon: gift.icon || "",
+    image_url: gift.image_url || "",
     currency: gift.currency || "vpt",
     vpt_units: gift.vpt_units ?? "",
     naira_value: gift.naira_value ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileInputRef = useRef(null);
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  function selectEmoji(emoji) {
+    update("icon", emoji);
+    setShowEmojiPicker(false);
+  }
+
+  async function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await api.upload("/interactions/gifts/upload-image", formData);
+      if (res.image_url) {
+        update("image_url", res.image_url);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to upload image");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeImage() {
+    update("image_url", "");
+  }
+
   async function handleSave() {
     if (!form.name.trim()) {
       setError("Name is required");
+      return;
+    }
+
+    if (!form.icon.trim() && !form.image_url) {
+      setError("An emoji or uploaded image is required");
       return;
     }
 
@@ -39,6 +92,7 @@ export default function GiftForm({ gift, onClose }) {
     const payload = {
       name: form.name.trim(),
       icon: form.icon.trim(),
+      image_url: form.image_url || null,
       currency: form.currency,
       ...(form.currency === "vpt"
         ? { vpt_units: Number(form.vpt_units) }
@@ -87,16 +141,95 @@ export default function GiftForm({ gift, onClose }) {
           />
         </div>
 
+        {/* Icon — emoji picker */}
         <div>
           <label className="mb-1 block text-sm font-medium text-white/72">
             Icon (emoji)
           </label>
+          <div className="flex items-center gap-2">
+            <div
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="flex h-10 w-14 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-white/6 text-2xl transition-colors hover:border-[var(--av-orange)]/50"
+            >
+              {form.icon || "?"}
+            </div>
+            <input
+              type="text"
+              value={form.icon}
+              onChange={(e) => update("icon", e.target.value)}
+              placeholder="Select or type emoji"
+              className="flex-1 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
+            />
+          </div>
+          {showEmojiPicker && (
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/6 p-2">
+              <div className="grid grid-cols-8 gap-1">
+                {EMOJI_GRID.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => selectEmoji(emoji)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-all hover:scale-110 hover:bg-white/10 ${form.icon === emoji ? "bg-[var(--av-orange)]/20 ring-1 ring-[var(--av-orange)]" : ""}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Gift design image upload */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-white/72">
+            Gift Design Image <span className="text-white/40">(optional)</span>
+          </label>
+          {form.image_url ? (
+            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/6 p-3">
+              <img
+                src={form.image_url}
+                alt="Gift design"
+                className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-xs text-white/50">{form.image_url}</p>
+              </div>
+              <button
+                type="button"
+                onClick={removeImage}
+                className="rounded-lg border border-red-400/30 bg-red-500/10 px-2 py-1 text-xs text-red-300 transition-colors hover:bg-red-500/20"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/4 px-3 py-4 text-sm text-white/50 transition-colors hover:border-[var(--av-orange)]/40 hover:text-white/70 disabled:opacity-50"
+            >
+              {uploading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--av-orange)] border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                  </svg>
+                  Upload gift image (PNG, JPG, WebP — max 5 MB)
+                </>
+              )}
+            </button>
+          )}
           <input
-            type="text"
-            value={form.icon}
-            onChange={(e) => update("icon", e.target.value)}
-            placeholder="e.g. ⭐"
-            className="w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleImageUpload}
+            className="hidden"
           />
         </div>
 
