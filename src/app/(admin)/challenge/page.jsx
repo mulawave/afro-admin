@@ -44,7 +44,7 @@ export default function ChallengePage() {
   const loadChallenges = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/challenge/admin/all");
+      const res = await api.get("/challenge/admin/list");
       setChallenges(res.challenges ?? []);
       setError(null);
     } catch (err) {
@@ -109,7 +109,7 @@ export default function ChallengePage() {
         await api.patch(`/challenge/admin/${editId}`, body);
         setFeedback({ tone: "success", message: "Challenge updated" });
       } else {
-        await api.post("/challenge/admin", body);
+        await api.post("/challenge/admin/create", body);
         setFeedback({ tone: "success", message: "Challenge created" });
       }
       setShowForm(false);
@@ -153,7 +153,7 @@ export default function ChallengePage() {
       action: async () => {
         setConfirm((c) => ({ ...c, busy: true, error: null }));
         try {
-          await api.patch(`/challenge/admin/${ch.id}/advance`);
+          await api.patch(`/challenge/admin/${ch.id}/phase`);
           setFeedback({ tone: "success", message: `Phase advanced to ${next}` });
           await loadChallenges();
           return true;
