@@ -23,6 +23,44 @@ const CATEGORY_LABELS = {
   in_stream_brief: "Brief (≤15s)",
 };
 
+const CATEGORY_DETAILS = {
+  banner_home: {
+    title: "Home Page Banner",
+    size: "1200 × 280 px (desktop) / 640 × 200 px (mobile)",
+    format: "JPEG, PNG, WebP — max 500 KB",
+    placement: "Displayed prominently at the top of the Home page on both the website and mobile app, above the channel grid.",
+    revenueSplit: "70% Operations · 30% Community Pool",
+  },
+  banner_page: {
+    title: "Channel / Page Banner",
+    size: "1200 × 180 px (desktop) / 640 × 140 px (mobile)",
+    format: "JPEG, PNG, WebP — max 500 KB",
+    placement: "Shown on the Channels listing page and individual channel pages on website and app.",
+    revenueSplit: "70% Operations · 30% Community Pool",
+  },
+  in_stream_pre: {
+    title: "Pre-Roll Video Ad",
+    size: "1920 × 1080 px (16:9) — video",
+    format: "MP4, WebM — max 30 MB, up to 30 seconds",
+    placement: "Plays before a live program starts on a channel. Shown to all viewers tuned in to the channel (website & app).",
+    revenueSplit: "50% Operations · 30% Channel Owner · 20% Community Pool",
+  },
+  in_stream_mid: {
+    title: "Mid-Roll Video Ad",
+    size: "1920 × 1080 px (16:9) — video",
+    format: "MP4, WebM — max 30 MB, up to 30 seconds",
+    placement: "Plays during scheduled ad breaks between programs on a channel. Shown to all active viewers (website & app).",
+    revenueSplit: "50% Operations · 30% Channel Owner · 20% Community Pool",
+  },
+  in_stream_brief: {
+    title: "Brief / Sponsored Message",
+    size: "1920 × 1080 px (16:9) — video or image + audio",
+    format: "MP4, WebM, or image + TTS — max 15 MB, max 15 seconds",
+    placement: "Short sponsored slot between programs. Can include flash-screen overlay with text-to-speech narration (website & app).",
+    revenueSplit: "50% Operations · 30% Channel Owner · 20% Community Pool",
+  },
+};
+
 export default function AdvertisementsPage() {
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +171,7 @@ export default function AdvertisementsPage() {
           { key: "all", label: "All Ads" },
           { key: "pending", label: "Pending Review" },
           { key: "impressions", label: "Impressions" },
+          { key: "guide", label: "Category Guide" },
         ].map((t) => (
           <button
             key={t.key}
@@ -151,6 +190,8 @@ export default function AdvertisementsPage() {
       {/* Impressions Tab */}
       {tab === "impressions" ? (
         <ImpressionsTable impressions={impressions} />
+      ) : tab === "guide" ? (
+        <CategoryGuide />
       ) : (
         <>
           {/* Filters */}
@@ -437,6 +478,47 @@ function ImpressionsTable({ impressions }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function CategoryGuide() {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-white/50">
+        Detailed specifications for each ad category — share with advertisers to ensure correct creative dimensions.
+      </p>
+      {Object.entries(CATEGORY_DETAILS).map(([key, info]) => (
+        <div
+          key={key}
+          className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl"
+        >
+          <div className="border-b border-white/8 px-5 py-3 flex items-center gap-3">
+            <span className="rounded-full border border-[var(--av-light-orange)]/40 bg-[var(--av-light-orange)]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--av-light-orange)]">
+              {CATEGORY_LABELS[key]}
+            </span>
+            <h3 className="text-sm font-semibold text-white">{info.title}</h3>
+          </div>
+          <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Banner / Video Size</span>
+              <p className="mt-0.5 text-sm text-white/80">{info.size}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Accepted Format</span>
+              <p className="mt-0.5 text-sm text-white/80">{info.format}</p>
+            </div>
+            <div className="md:col-span-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Placement</span>
+              <p className="mt-0.5 text-sm text-white/80">{info.placement}</p>
+            </div>
+            <div className="md:col-span-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Revenue Split</span>
+              <p className="mt-0.5 text-sm font-medium text-[var(--av-light-orange)]">{info.revenueSplit}</p>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
