@@ -22,6 +22,7 @@ const links = [
   { name: "Challenge", path: "/challenge", tone: "Operations" },
   { name: "KYC", path: "/kyc", tone: "Compliance" },
   { name: "Copyright", path: "/copyright", tone: "Legal" },
+  { name: "Advertisements", path: "/advertisements", tone: "Monetization" },
   { name: "Settings", path: "/settings", tone: "Infrastructure" },
   { name: "Audit", path: "/audit", tone: "Infrastructure" },
 ];

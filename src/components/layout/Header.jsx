@@ -20,6 +20,7 @@ const TITLES = {
   "/communication": "Operator Broadcasts",
   "/feature-flags": "Feature Rollouts",
   "/settings": "System Settings",
+  "/advertisements": "Ad Management",
   "/audit": "Audit Trail",
 };
 
