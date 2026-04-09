@@ -29,12 +29,16 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <form onSubmit={(event) => { event.preventDefault(); handleLogin(); }} className="w-full max-w-md rounded-[2rem] border border-[var(--admin-border)] bg-[var(--admin-surface-strong)] p-8 shadow-[0_28px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
-        {logo_url ? (
-          <img src={logo_url} alt="AfroVision" className="h-12 w-auto object-contain mb-4" />
-        ) : (
-          <p className="text-[11px] uppercase tracking-[0.34em] text-[var(--av-light-orange)]/85">AfroVision</p>
-        )}
-        <h1 className="mt-3 text-3xl font-semibold text-white">Admin Console</h1>
+        <div className="flex flex-col items-center mb-6">
+          {logo_url ? (
+            <img src={logo_url} alt="AfroVision" className="h-16 w-auto object-contain" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--av-orange)] to-[var(--av-light-orange)] flex items-center justify-center font-bold text-[var(--av-dark-blue)] text-2xl">
+              A
+            </div>
+          )}
+        </div>
+        <h1 className="text-3xl font-semibold text-white text-center">Admin Console</h1>
         <p className="mt-2 text-sm text-white/65">Use an administrator account to access moderation, finance, and operational controls.</p>
 
         <input

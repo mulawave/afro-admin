@@ -24,6 +24,7 @@ const links = [
   { name: "Copyright", path: "/copyright", tone: "Legal" },
   { name: "Advertisements", path: "/advertisements", tone: "Monetization" },
   { name: "Ad Analytics", path: "/ad-analytics", tone: "Monetization" },
+  { name: "Marquee", path: "/marquee", tone: "Content" },
   { name: "Settings", path: "/settings", tone: "Infrastructure" },
   { name: "Audit", path: "/audit", tone: "Infrastructure" },
 ];

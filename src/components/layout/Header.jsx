@@ -26,6 +26,7 @@ const TITLES = {
   "/settings": "System Settings",
   "/advertisements": "Ad Management",
   "/ad-analytics": "Ad Analytics & Revenue",
+  "/marquee": "Marquee Ticker",
   "/audit": "Audit Trail",
 };
 
