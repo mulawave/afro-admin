@@ -10,6 +10,8 @@ const links = [
   { name: "Design", path: "/design", tone: "Content" },
   { name: "Gifts", path: "/gifts", tone: "Monetization" },
   { name: "Plans", path: "/plans", tone: "Monetization" },
+  { name: "Viewer Plans", path: "/viewer-plans", tone: "Monetization" },
+  { name: "Community Pool", path: "/community-pool", tone: "Monetization" },
   { name: "Wallets", path: "/wallets", tone: "Finance" },
   { name: "Withdrawals", path: "/withdrawals", tone: "Finance" },
   { name: "Ledger", path: "/ledger", tone: "Finance" },

@@ -33,7 +33,7 @@ export default function PlansPage() {
   const loadPlans = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/plans");
+      const res = await api.get("/admin/plans?type=creator");
       setPlans(res.plans ?? []);
       setError(null);
     } catch (err) {

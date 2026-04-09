@@ -1,7 +1,7 @@
 @echo off
 echo === Starting Admin Deploy ===
 echo %date% %time%
-cd /d c:\Users\HomePC\Documents\AfroVision_web\Afrovision\admin
+cd /d %~dp0
 
 echo.
 echo === Deploying Admin to Cloud Run ===
