@@ -8,6 +8,7 @@ const TITLES = {
   "/dashboard": "Platform Overview",
   "/users": "User Operations",
   "/channels": "Channel Moderation",
+  "/design": "Brand Design",
   "/gifts": "Gift Catalog",
   "/plans": "Subscription Plans",
   "/wallets": "Wallet Visibility",
@@ -19,8 +20,12 @@ const TITLES = {
   "/blockchain": "Blockchain Readiness",
   "/communication": "Operator Broadcasts",
   "/feature-flags": "Feature Rollouts",
+  "/challenge": "Challenge Management",
+  "/kyc": "Identity Verification",
+  "/copyright": "Copyright Claims",
   "/settings": "System Settings",
   "/advertisements": "Ad Management",
+  "/ad-analytics": "Ad Analytics & Revenue",
   "/audit": "Audit Trail",
 };
 
