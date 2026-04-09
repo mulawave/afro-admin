@@ -40,9 +40,9 @@ export default function KycPage() {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const url = filter ? `/kyc/admin/all?status=${filter}` : "/kyc/admin/all";
+      const url = filter ? `/kyc/admin/list?status=${filter}` : "/kyc/admin/list";
       const res = await api.get(url);
-      setRecords(res.records ?? []);
+      setRecords(res.items ?? res.records ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load KYC records");
