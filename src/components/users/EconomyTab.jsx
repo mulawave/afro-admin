@@ -19,7 +19,7 @@ export default function EconomyTab({ detail, wallet, walletLoading, ledger, user
         <StatCard label="Blockchain Tokens" value={fmt(u.blockchain_tokens)} color="orange" />
         <StatCard label="Profit" value={fmt(u.profit)} color="teal" />
         <StatCard label="Stake Wallet" value={fmt(u.stake_wallet)} color="cyan" />
-        <StatCard label="VPT Balance" value={fmt(u.vpt_balance)} color="purple" />
+        <StatCard label="VPT Balance" value={fmt(u.vpt)} color="purple" />
         <StatCard label="Badge Live Wire" value={fmt(u.badge_live_wire)} color="pink" />
         <StatCard label="Level" value={u.level ?? "—"} color="lime" />
       </div>

@@ -85,6 +85,8 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${apiBase}${path}`, {
     ...options,
+    cache: "no-store",
+    next: { revalidate: 0 },
     headers: buildHeaders(options),
   });
 
@@ -115,6 +117,8 @@ async function requestFormData(path, formData, options = {}) {
   };
 
   const res = await fetch(`${apiBase}${path}`, {
+    cache: "no-store",
+    next: { revalidate: 0 },
     method: options.method || "POST",
     headers,
     body: formData,

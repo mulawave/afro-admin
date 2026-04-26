@@ -1,18 +1,28 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 function getBackendBase() {
-  return (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://afrovision-backend-134538542038.us-central1.run.app").replace(/\/$/, "");
+  return (
+    process.env.API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "https://afrovision-backend-134538542038.us-central1.run.app"
+  ).replace(/\/$/, "");
 }
 
 function buildTargetUrl(pathSegments, requestUrl) {
   const backendBase = getBackendBase();
+
   if (!backendBase) {
-    throw new Error("Admin API base URL is not configured. Set NEXT_PUBLIC_API_BASE_URL or API_BASE_URL.");
+    throw new Error(
+      "Admin API base URL is not configured. Set NEXT_PUBLIC_API_BASE_URL or API_BASE_URL."
+    );
   }
 
   const upstream = new URL(`${backendBase}/${pathSegments.join("/")}`);
   const incoming = new URL(requestUrl);
   upstream.search = incoming.search;
+
   return upstream;
 }
 
@@ -20,39 +30,40 @@ function buildUpstreamHeaders(request) {
   const headers = new Headers();
 
   const contentType = request.headers.get("content-type");
-  if (contentType) {
-    headers.set("content-type", contentType);
-  }
+  if (contentType) headers.set("content-type", contentType);
 
   const authorization = request.headers.get("authorization");
-  if (authorization) {
-    headers.set("authorization", authorization);
-  }
+  if (authorization) headers.set("authorization", authorization);
 
   const accept = request.headers.get("accept");
-  if (accept) {
-    headers.set("accept", accept);
-  }
+  if (accept) headers.set("accept", accept);
 
   return headers;
 }
 
 async function proxyRequest(request, context) {
   try {
-    const targetUrl = buildTargetUrl((await context.params).path, request.url);
+    const { path } = await context.params;
+
+    const targetUrl = buildTargetUrl(path, request.url);
     const headers = buildUpstreamHeaders(request);
     const method = request.method.toUpperCase();
-    const body = method === "GET" || method === "HEAD" ? undefined : Buffer.from(await request.arrayBuffer());
+
+    const body =
+      method === "GET" || method === "HEAD"
+        ? undefined
+        : Buffer.from(await request.arrayBuffer());
 
     const upstream = await fetch(targetUrl, {
       method,
       headers,
       body,
       redirect: "follow",
+      cache: "no-store",
     });
 
     const responseHeaders = new Headers();
-    const contentType = upstream.headers.get("content-type");
+    const contentType = upstream.headers.get("content-type") || "";
     if (contentType) {
       responseHeaders.set("content-type", contentType);
     }
@@ -69,7 +80,7 @@ async function proxyRequest(request, context) {
         error: error.message || "Admin proxy request failed",
         cause: error.cause?.message || null,
       },
-      { status: 502 },
+      { status: 502 }
     );
   }
 }
