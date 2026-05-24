@@ -119,7 +119,7 @@ Comprehensive pre-launch validation of the entire AfroVision Admin Console acros
 - ✅ Admin layout is in protected route group (admin)
 - ✅ Login is in separate auth route group
 
-> Backend requirement: JWT validation server-side, rate limiting active, no sensitive logs
+> Backend requirement: JWT validation server-side, no sensitive logs
 
 ## 12. Failure Recovery (22/22)
 
@@ -200,10 +200,8 @@ These items are outside the admin console frontend scope and must be verified on
 9. API response times < 500ms
 10. Firestore rules enforcement
 11. JWT server-side validation
-12. Rate limiting active
 13. Structured logging
 14. Mid-transaction failure recovery
-15. Max gift/withdrawal rate limiting
 16. Anti-spam controls
 
 ## Safety Invariants

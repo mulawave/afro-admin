@@ -6,14 +6,15 @@ import StatCard from "@/components/dashboard/StatCard";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import PoolsCard from "@/components/dashboard/PoolsCard";
 
-const REFRESH_INTERVAL = 10_000;
-
 export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchStats = useCallback(async () => {
+    setRefreshing(true);
+
     try {
       const [dashboardRes, systemRes, queueRes] = await Promise.all([
         api.get("/admin/dashboard"),
@@ -29,23 +30,37 @@ export default function DashboardPage() {
         systemTotals,
         queueStats,
         pools: {
-          operations_ngn: systemTotals.pools?.operations?.naira ?? 0,
-          community_ngn: systemTotals.pools?.community?.naira ?? 0,
-          operations_vpt: systemTotals.pools?.operations?.vpt_units ?? 0,
-          community_vpt: systemTotals.pools?.community?.vpt_units ?? 0,
+          operations_ngn: systemTotals.pools?.operations?.balance_ngn ?? 0,
+          community_ngn: systemTotals.pools?.community?.balance_ngn ?? 0,
+          operations_vpt: systemTotals.pools?.operations?.balance_vpt ?? 0,
+          community_vpt: systemTotals.pools?.community?.balance_vpt ?? 0,
         },
       });
       setError(null);
       setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load stats");
+    } finally {
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        fetchStats();
+      }
+    }
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [fetchStats]);
 
   if (error && !data) {
@@ -89,6 +104,14 @@ export default function DashboardPage() {
           <p className="mt-2 text-sm text-white/58">Live platform health across users, monetization, queues, and treasury pools.</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={fetchStats}
+            disabled={refreshing}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[var(--av-light-orange)] hover:text-[var(--av-light-orange)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
           {error && (
             <span className="text-sm text-amber-200">Auto-refresh paused — last update failed</span>
           )}

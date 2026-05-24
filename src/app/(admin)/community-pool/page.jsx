@@ -111,9 +111,9 @@ export default function CommunityPoolPage() {
         <>
           {/* Pool Overview Cards */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Pool Balance" value={`₦${fmt(stats.pool?.balance_ngn)}`} sub="Available for distribution" accent="orange" />
-            <StatCard label="Total Credited" value={`₦${fmt(stats.pool?.total_credited)}`} sub="Lifetime pool inflow" accent="sky" />
-            <StatCard label="Total Distributed" value={`₦${fmt(stats.pool?.total_distributed)}`} sub="Lifetime viewer rewards" accent="emerald" />
+            <StatCard label="Pool Balance" value={`${fmtVpt(stats.pool?.balance_vpt)} vPT`} sub={`≈ ₦${fmt(stats.pool?.balance_ngn)}`} accent="orange" />
+            <StatCard label="Total Credited" value={`${fmtVpt(stats.pool?.total_credited_vpt)} vPT`} sub={`≈ ₦${fmt(stats.pool?.total_credited)}`} accent="sky" />
+            <StatCard label="Total Distributed" value={`${fmtVpt(stats.pool?.total_distributed_vpt)} vPT`} sub={`≈ ₦${fmt(stats.pool?.total_distributed)}`} accent="emerald" />
             <StatCard label="Eligible Viewers" value={stats.eligible_viewers} sub={`${fmtVpt(stats.total_multipliers)} total multiplier weight`} accent="purple" />
           </div>
 
@@ -124,8 +124,8 @@ export default function CommunityPoolPage() {
               <div className="space-y-3 text-sm">
                 <ConfigRow label="Reward Percent" value={`${stats.reward_percent}% per cycle`} />
                 <ConfigRow label="vPT Price" value={`₦${fmt(stats.vpt_price_ngn)} / vPT`} />
-                <ConfigRow label="Next Payout (NGN)" value={`₦${fmt(stats.next_distribution_ngn)}`} />
                 <ConfigRow label="Next Payout (vPT)" value={`${fmtVpt(stats.next_distribution_vpt)} vPT`} />
+                <ConfigRow label="Next Payout (NGN equiv)" value={`≈ ₦${fmt(stats.next_distribution_ngn)}`} />
               </div>
             </div>
 

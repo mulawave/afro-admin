@@ -78,13 +78,28 @@ export default function AdvertisementsPage() {
       setLoading(true);
       if (tab === "pending") {
         const res = await api.get("/ads/pending");
-        setAds(res ?? []);
+        const pendingAds = Array.isArray(res?.ads)
+          ? res.ads
+          : Array.isArray(res)
+            ? res
+            : [];
+        setAds(pendingAds);
       } else if (tab === "impressions") {
         const res = await api.get("/ads/impressions");
-        setImpressions(res ?? []);
+        const impressionList = Array.isArray(res?.impressions)
+          ? res.impressions
+          : Array.isArray(res)
+            ? res
+            : [];
+        setImpressions(impressionList);
       } else {
         const res = await api.get("/ads/all");
-        setAds(res ?? []);
+        const adList = Array.isArray(res?.ads)
+          ? res.ads
+          : Array.isArray(res)
+            ? res
+            : [];
+        setAds(adList);
       }
       setError(null);
     } catch (err) {
@@ -127,7 +142,8 @@ export default function AdvertisementsPage() {
     });
   }
 
-  const filtered = ads.filter((ad) => {
+  const safeAds = Array.isArray(ads) ? ads : [];
+  const filtered = safeAds.filter((ad) => {
     if (filter && ad.status !== filter) return false;
     if (categoryFilter && ad.category !== categoryFilter) return false;
     return true;

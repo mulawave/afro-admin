@@ -22,7 +22,7 @@ export default function AdminLayout({ children }) {
     <div className="min-h-screen">
       <Sidebar />
 
-      <div className="flex min-h-screen flex-col lg:pl-72">
+      <div className="flex min-h-screen flex-col md:pl-72">
         <Header user={user} />
 
         <main className="flex-1 px-4 pb-8 pt-32 sm:px-6 lg:px-8 lg:pt-8">

@@ -71,10 +71,17 @@ export default function AdAnalyticsPage() {
 
   if (!data) return null;
 
-  const { overview, daily, categories, top_ads, top_channels, status_breakdown } = data;
+  const overview = data?.overview || {};
+  const daily = Array.isArray(data?.daily) ? data.daily : [];
+  const categories = Array.isArray(data?.categories) ? data.categories : [];
+  const top_ads = Array.isArray(data?.top_ads) ? data.top_ads : [];
+  const top_channels = Array.isArray(data?.top_channels) ? data.top_channels : [];
+  const status_breakdown = data?.status_breakdown && typeof data.status_breakdown === "object"
+    ? data.status_breakdown
+    : {};
 
   // Chart bar max
-  const chartMax = Math.max(...daily.map((d) => d[chartMetric] || 0), 1);
+  const chartMax = Math.max(...daily.map((d) => d?.[chartMetric] || 0), 1);
 
   return (
     <div className="space-y-6">
@@ -174,9 +181,9 @@ export default function AdAnalyticsPage() {
           <h3 className="text-sm font-semibold text-white/80">By Category</h3>
           <div className="mt-3 space-y-3">
             {categories.length === 0 && <p className="text-xs text-white/30">No impression data yet.</p>}
-            {categories.sort((a, b) => b.revenue - a.revenue).map((c, i) => {
-              const catMax = Math.max(...categories.map((x) => x.revenue), 1);
-              const pct = (c.revenue / catMax) * 100;
+            {[...categories].sort((a, b) => (b?.revenue || 0) - (a?.revenue || 0)).map((c, i) => {
+              const catMax = Math.max(...categories.map((x) => x?.revenue || 0), 1);
+              const pct = ((c?.revenue || 0) / catMax) * 100;
               return (
                 <div key={i}>
                   <div className="flex items-center justify-between">

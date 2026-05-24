@@ -22,7 +22,12 @@ export default function CreatorSubscriptionsPage() {
       setLoading(true);
       const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
       const res = await api.get(`/admin/creator-subscriptions${query}`);
-      setSubscriptions(res.subscriptions ?? []);
+      const subscriptionList = Array.isArray(res?.subscriptions)
+        ? res.subscriptions
+        : Array.isArray(res)
+          ? res
+          : [];
+      setSubscriptions(subscriptionList);
       setStats(res.stats ?? null);
       setError(null);
     } catch (err) {
@@ -37,7 +42,8 @@ export default function CreatorSubscriptionsPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    return subscriptions.filter((subscription) => {
+    const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
+    return safeSubscriptions.filter((subscription) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return [

@@ -8,6 +8,7 @@ const TITLES = {
   "/dashboard": "Platform Overview",
   "/users": "User Operations",
   "/channels": "Channel Moderation",
+  "/categories": "Channel Categories",
   "/design": "Brand Design",
   "/gifts": "Gift Catalog",
   "/plans": "Subscription Plans",

@@ -7,11 +7,17 @@ const links = [
   { name: "Dashboard", path: "/dashboard", tone: "Core" },
   { name: "Users", path: "/users", tone: "Core" },
   { name: "Channels", path: "/channels", tone: "Core" },
+  { name: "Library Moderation", path: "/library", tone: "Operations" },
+  { name: "Categories", path: "/categories", tone: "Core" },
   { name: "Design", path: "/design", tone: "Content" },
+  { name: "Email Templates", path: "/email-templates", tone: "Content" },
   { name: "Gifts", path: "/gifts", tone: "Monetization" },
   { name: "Plans", path: "/plans", tone: "Monetization" },
   { name: "Viewer Plans", path: "/viewer-plans", tone: "Monetization" },
   { name: "Community Pool", path: "/community-pool", tone: "Monetization" },
+  { name: "Operations Pool", path: "/operations-pool", tone: "Monetization" },
+  { name: "RBD Pool", path: "/rbd-pool", tone: "Monetization" },
+  { name: "Promo Modal", path: "/promo-modal", tone: "Content" },
   { name: "Wallets", path: "/wallets", tone: "Finance" },
   { name: "Withdrawals", path: "/withdrawals", tone: "Finance" },
   { name: "Ledger", path: "/ledger", tone: "Finance" },
@@ -22,6 +28,7 @@ const links = [
   { name: "Communication", path: "/communication", tone: "Operations" },
   { name: "Feature Flags", path: "/feature-flags", tone: "Operations" },
   { name: "Challenge", path: "/challenge", tone: "Operations" },
+  { name: "Audition Signups", path: "/audition-signups", tone: "Operations" },
   { name: "KYC", path: "/kyc", tone: "Compliance" },
   { name: "Copyright", path: "/copyright", tone: "Legal" },
   { name: "Advertisements", path: "/advertisements", tone: "Monetization" },
@@ -35,7 +42,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-x-4 top-4 z-40 flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[2rem] border border-[var(--admin-border)] bg-[var(--admin-surface-strong)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl lg:inset-x-auto lg:inset-y-6 lg:left-6 lg:max-h-[calc(100vh-3rem)] lg:w-64 lg:rounded-[2.25rem] lg:px-5 lg:py-6">
+    <aside className="fixed inset-y-6 left-6 z-40 hidden w-64 max-h-[calc(100vh-3rem)] flex-col overflow-y-auto rounded-[2.25rem] border border-[var(--admin-border)] bg-[var(--admin-surface-strong)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl md:flex">
       <div className="mb-4 flex items-center justify-between lg:block">
         <div>
           <p className="text-[10px] uppercase tracking-[0.34em] text-[var(--av-light-orange)]/85">AfroVision</p>
@@ -46,7 +53,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+      <nav aria-label="Admin Navigation" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 pb-4 overscroll-contain">
         {links.map((link) => {
           const active = pathname === link.path;
 

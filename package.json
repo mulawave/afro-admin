@@ -6,13 +6,15 @@
     "dev": "node scripts/run-next.mjs dev --port 3001",
     "build": "node scripts/run-next.mjs build",
     "start": "node scripts/run-next.mjs start --port 3001",
-    "lint": "node ./node_modules/next/dist/bin/next lint",
+    "lint": "eslint \"{app,src,scripts}/**/*.{js,jsx,mjs}\"",
     "test": "node scripts/verify-step3.mjs",
     "smoke": "node scripts/smoke-admin-http.mjs"
   },
   "dependencies": {
+    "axios": "^1.16.1",
     "get-proto": "^1.0.1",
-    "next": "15.2.4",
+    "next": "^16.2.6",
+    "nodemailer": "^8.0.7",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "recharts": "^2.15.4"

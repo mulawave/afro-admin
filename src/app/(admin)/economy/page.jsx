@@ -28,10 +28,10 @@ export default function EconomyPage() {
       setData({
         ...settingsMap,
         pools: {
-          operations_ngn: totalsRes.pools?.operations?.naira ?? 0,
-          community_ngn: totalsRes.pools?.community?.naira ?? 0,
-          operations_vpt: totalsRes.pools?.operations?.vpt_units ?? 0,
-          community_vpt: totalsRes.pools?.community?.vpt_units ?? 0,
+          operations_ngn: totalsRes.pools?.operations?.balance_ngn ?? 0,
+          community_ngn: totalsRes.pools?.community?.balance_ngn ?? 0,
+          operations_vpt: totalsRes.pools?.operations?.balance_vpt ?? 0,
+          community_vpt: totalsRes.pools?.community?.balance_vpt ?? 0,
         },
         pending_withdrawals: totalsRes.pending_withdrawals ?? { count: 0, total_amount: 0 },
         ledger: totalsRes.ledger ?? {},
@@ -161,10 +161,10 @@ export default function EconomyPage() {
 }
 
 function SplitSection({ data, saving, onUpdate }) {
-  const community = Number(data?.COMMUNITY_POOL_PERCENT ?? 0);
-  const extraction = Number(data?.VPT_EXTRACTION_PERCENT ?? 0);
-  const operations = Math.max(0, 100 - community);
-  const total = community + operations;
+  const community = Number(data?.COMMUNITY_POOL_PERCENT ?? 20);
+  const extraction = Number(data?.VPT_EXTRACTION_PERCENT ?? 30);
+  const operations = Math.max(0, 100 - community - extraction);
+  const total = community + operations + extraction;
   const isValid = total === 100;
 
   return (
@@ -194,7 +194,7 @@ function SplitSection({ data, saving, onUpdate }) {
         <div className={`mt-2 rounded-2xl px-3 py-2 text-sm font-medium ${
           isValid ? "bg-emerald-500/10 text-emerald-200" : "bg-red-500/10 text-red-200"
         }`}>
-          Community + operations = {total}% {isValid ? "✓" : "⚠ review settings"}
+          Community ({community}%) + Operations ({operations}%) + vPT Extraction ({extraction}%) = {total}% {isValid ? "✓" : "⚠ review settings"}
         </div>
       </div>
     </Section>
