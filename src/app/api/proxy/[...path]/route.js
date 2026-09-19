@@ -6,7 +6,7 @@ function getBackendBase() {
   return (
     process.env.API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://afrovision-backend-134538542038.us-central1.run.app"
+    "https://afrovision-backend-zoeqld5lsa-uc.a.run.app"
   ).replace(/\/$/, "");
 }
 
@@ -41,9 +41,31 @@ function buildUpstreamHeaders(request) {
   return headers;
 }
 
+// Routes the admin app must be able to reach before a session exists
+// (login itself, and public branding shown on the login screen).
+const PUBLIC_PATH_PREFIXES = ["auth/login", "home/content"];
+
+function isPublicPath(pathSegments) {
+  const joined = pathSegments.join("/");
+  return PUBLIC_PATH_PREFIXES.some((prefix) => joined === prefix || joined.startsWith(`${prefix}/`));
+}
+
+function isAuthorized(request) {
+  // This relay forwards to the real backend with no CORS exposure of its
+  // own, but without this check it was reachable by anyone as an anonymous
+  // relay onto the backend. Require the caller to already hold a bearer
+  // token — the backend still independently authorizes the actual route.
+  const authorization = request.headers.get("authorization");
+  return Boolean(authorization && authorization.startsWith("Bearer ") && authorization.length > "Bearer ".length);
+}
+
 async function proxyRequest(request, context) {
   try {
     const { path } = await context.params;
+
+    if (!isPublicPath(path) && !isAuthorized(request)) {
+      return NextResponse.json({ error: "Missing or invalid Authorization header" }, { status: 401 });
+    }
 
     const targetUrl = buildTargetUrl(path, request.url);
     const headers = buildUpstreamHeaders(request);

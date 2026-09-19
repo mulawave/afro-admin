@@ -23,6 +23,20 @@ function LiveBadge({ isLive }) {
   );
 }
 
+const PLATFORM_LABELS = { web: "Web", android: "Android App", tv: "TV" };
+
+function PlatformBreakdownRow({ breakdown, suffix = "" }) {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-white/45">
+      {Object.entries(PLATFORM_LABELS).map(([key, label]) => (
+        <span key={key}>
+          {label}: <span className="text-white/70">{(breakdown?.[key] || 0).toLocaleString("en-NG")}{suffix}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ChannelCell({ row }) {
   return (
     <div className="flex items-center gap-3">
@@ -87,15 +101,34 @@ export default function LiveViewersPage() {
     {
       key: "current_viewers",
       label: "Live Viewers",
-      render: (row) => <span className="font-semibold text-white">{row.current_viewers.toLocaleString("en-NG")}</span>,
+      render: (row) => (
+        <div>
+          <span className="font-semibold text-white">{row.current_viewers.toLocaleString("en-NG")}</span>
+          <PlatformBreakdownRow breakdown={row.current_viewers_by_platform} />
+        </div>
+      ),
     },
     { key: "peak_viewers", label: "Peak", render: (row) => row.peak_viewers.toLocaleString("en-NG") },
-    { key: "total_views", label: "Total Views", render: (row) => row.total_views.toLocaleString("en-NG") },
+    {
+      key: "total_views",
+      label: "Total Views",
+      render: (row) => (
+        <div>
+          <span>{row.total_views.toLocaleString("en-NG")}</span>
+          <PlatformBreakdownRow breakdown={row.views_by_platform} />
+        </div>
+      ),
+    },
     { key: "followers_count", label: "Followers", render: (row) => row.followers_count.toLocaleString("en-NG") },
     {
       key: "total_watch_hours",
       label: "Hours Watched",
-      render: (row) => row.total_watch_hours.toLocaleString("en-NG", { maximumFractionDigits: 1 }),
+      render: (row) => (
+        <div>
+          <span>{row.total_watch_hours.toLocaleString("en-NG", { maximumFractionDigits: 1 })}</span>
+          <PlatformBreakdownRow breakdown={row.watch_hours_by_platform} />
+        </div>
+      ),
     },
     { key: "category", label: "Category", render: (row) => row.category || "—" },
   ];
@@ -154,6 +187,31 @@ export default function LiveViewersPage() {
         <StatCard title="All-Time Views" value={summary.total_all_time_views} accent="blue" hint="Across all channels" />
         <StatCard title="Total Followers" value={summary.total_followers} accent="purple" hint="Across all channels" />
         <StatCard title="Hours Watched" value={summary.total_watch_hours} accent="amber" hint="Lifetime watch time" />
+      </div>
+
+      <div className="rounded-[1.75rem] border border-white/8 bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-white/50">By Platform</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {Object.entries(PLATFORM_LABELS).map(([key, label]) => (
+            <div key={key} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <p className="text-sm font-medium text-white/72">{label}</p>
+              <dl className="mt-3 space-y-1.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <dt className="text-white/45">Current viewers</dt>
+                  <dd className="font-semibold text-white">{(summary.current_viewers_by_platform?.[key] || 0).toLocaleString("en-NG")}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-white/45">All-time views</dt>
+                  <dd className="text-white/85">{(summary.total_views_by_platform?.[key] || 0).toLocaleString("en-NG")}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-white/45">Hours watched</dt>
+                  <dd className="text-white/85">{(summary.total_watch_hours_by_platform?.[key] || 0).toLocaleString("en-NG", { maximumFractionDigits: 1 })}</dd>
+                </div>
+              </dl>
+            </div>
+          ))}
+        </div>
       </div>
 
       {topPerformers?.length > 0 && (

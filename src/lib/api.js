@@ -6,7 +6,7 @@ function resolveApiBase() {
   const configuredBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
   if (configuredBase) return configuredBase;
 
-  return "https://afrovision-backend-134538542038.us-central1.run.app";
+  return "https://afrovision-backend-zoeqld5lsa-uc.a.run.app";
 }
 
 export const ADMIN_TOKEN_KEY = "admin_token";
@@ -177,7 +177,8 @@ export async function getCurrentAdmin() {
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: "POST", body: JSON.stringify(body) }),
+  put: (path, body) => request(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: (path) => request(path, { method: "DELETE" }),
+  delete: (path, body) => request(path, { method: "DELETE", ...(body ? { body: JSON.stringify(body) } : {}) }),
   upload: (path, formData, method = "POST") => requestFormData(path, formData, { method }),
 };

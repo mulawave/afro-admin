@@ -7,6 +7,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 const PAYMENT_OPTIONS = ["pending", "paid", "failed"];
 const SIGNUP_OPTIONS = ["pending_payment", "enrolled", "cancelled"];
+const JOURNEY_OPTIONS = ["signup_received", "shortlisted", "audition_submitted", "final_selected"];
 
 function fmtDate(value) {
   if (!value) return "-";
@@ -47,6 +48,7 @@ function downloadCsv(rows, challengeLabelById) {
     "payment_reference",
     "payment_status",
     "signup_status",
+    "journey_step",
     "payment_amount_ngn",
     "vpt_price_at_signup",
     "vpt_allocated",
@@ -84,6 +86,7 @@ function downloadCsv(rows, challengeLabelById) {
       row.payment_reference,
       row.payment_status,
       row.signup_status,
+      row.journey_step,
       row.payment_amount_ngn,
       row.vpt_price_at_signup,
       row.vpt_allocated,
@@ -123,6 +126,7 @@ export default function AuditionSignupsPage() {
   const [feedback, setFeedback] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [editingJourneyStep, setEditingJourneyStep] = useState(false);
 
   const [challengeOptions, setChallengeOptions] = useState([]);
   const [search, setSearch] = useState("");
@@ -130,6 +134,7 @@ export default function AuditionSignupsPage() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [signupStatus, setSignupStatus] = useState("");
   const [emailSent, setEmailSent] = useState("");
+  const [journeyStep, setJourneyStep] = useState("");
 
   const challengeLabelById = useMemo(() => {
     const map = {};
@@ -158,6 +163,7 @@ export default function AuditionSignupsPage() {
       if (paymentStatus) params.set("payment_status", paymentStatus);
       if (signupStatus) params.set("signup_status", signupStatus);
       if (emailSent) params.set("email_sent", emailSent);
+      if (journeyStep) params.set("journey_step", journeyStep);
       if (search.trim()) params.set("search", search.trim());
 
       const res = await api.get(`/challenge/admin/audition-signups?${params.toString()}`);
@@ -170,7 +176,7 @@ export default function AuditionSignupsPage() {
     } finally {
       setLoading(false);
     }
-  }, [challengeId, paymentStatus, signupStatus, emailSent, search]);
+  }, [challengeId, paymentStatus, signupStatus, emailSent, journeyStep, search]);
 
   useEffect(() => {
     loadChallenges();
@@ -249,6 +255,23 @@ export default function AuditionSignupsPage() {
     });
   }
 
+  async function updateJourneyStep(signupId, newStep) {
+    try {
+      await api.patch(`/challenge/admin/audition-signups/${signupId}`, {
+        journey_step: newStep,
+      });
+      setFeedback({ tone: "success", message: "Journey step updated" });
+      await loadSignups();
+      if (selected?.id === signupId) {
+        setSelected({ ...selected, journey_step: newStep });
+      }
+      return true;
+    } catch (err) {
+      setFeedback({ tone: "error", message: err.message || "Failed to update journey step" });
+      return false;
+    }
+  }
+
   const columns = [
     {
       key: "participant",
@@ -287,6 +310,11 @@ export default function AuditionSignupsPage() {
       key: "signup_status",
       label: "Signup",
       render: (row) => <StatusPill value={row.signup_status} />,
+    },
+    {
+      key: "journey_step",
+      label: "Journey",
+      render: (row) => <StatusPill value={row.journey_step} />,
     },
     {
       key: "created_at",
@@ -401,6 +429,19 @@ export default function AuditionSignupsPage() {
               </option>
             ))}
           </select>
+
+          <select
+            value={journeyStep}
+            onChange={(e) => setJourneyStep(e.target.value)}
+            className="w-full rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none"
+          >
+            <option value="">All journey steps</option>
+            {JOURNEY_OPTIONS.map((step) => (
+              <option key={step} value={step}>
+                {step}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -441,6 +482,7 @@ export default function AuditionSignupsPage() {
               setPaymentStatus("");
               setSignupStatus("");
               setEmailSent("");
+              setJourneyStep("");
             }}
             className="rounded-full border border-white/10 bg-white/4 px-3 py-1 text-xs font-medium text-white/50 transition hover:text-white"
           >
@@ -487,15 +529,57 @@ export default function AuditionSignupsPage() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-white">Signup Details</h2>
             <button
-              onClick={() => setSelected(null)}
+              onClick={() => {
+                setSelected(null);
+                setEditingJourneyStep(false);
+              }}
               className="rounded-xl border border-white/12 bg-white/6 px-3 py-1.5 text-xs text-white/70 hover:text-white"
             >
               Close
             </button>
           </div>
-          <pre className="overflow-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-white/75">
-            {JSON.stringify(selected, null, 2)}
-          </pre>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-medium text-white/80">Journey Step</span>
+                <button
+                  onClick={() => setEditingJourneyStep(!editingJourneyStep)}
+                  className="text-xs text-sky-300 hover:text-sky-200"
+                >
+                  {editingJourneyStep ? "Cancel" : "Edit"}
+                </button>
+              </div>
+              {editingJourneyStep ? (
+                <div className="flex gap-2">
+                  <select
+                    value={selected.journey_step || ""}
+                    onChange={(e) => setSelected({ ...selected, journey_step: e.target.value })}
+                    className="flex-1 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none"
+                  >
+                    {JOURNEY_OPTIONS.map((step) => (
+                      <option key={step} value={step}>
+                        {step}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      updateJourneyStep(selected.id, selected.journey_step);
+                      setEditingJourneyStep(false);
+                    }}
+                    className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm text-emerald-300 hover:bg-emerald-500/30"
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : (
+                <span className="text-sm text-white/70">{selected.journey_step || "-"}</span>
+              )}
+            </div>
+            <pre className="overflow-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-white/75">
+              {JSON.stringify(selected, null, 2)}
+            </pre>
+          </div>
         </div>
       )}
 
