@@ -51,9 +51,13 @@ export default function SystemTab({ detail, subcollections }) {
       <Section title="KYC Details">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <MetaItem label="Status" value={u.kyc_status || "none"} />
+          <MetaItem label="Date of Birth" value={u.date_of_birth || "—"} />
+          <MetaItem label="Is Minor" value={u.is_minor ? "Yes" : "No"} />
+          <MetaItem label="Guardian ID" value={u.guardian_id || "—"} />
           <MetaItem label="KYC Type" value={u.kyc_type || "—"} />
           <MetaItem label="KYC ID" value={u.kyc_id || "—"} />
-          <MetaItem label="KYC 5" value={u.kyc_5 || "—"} />
+          <MetaItem label="Grace Period End" value={u.kyc_grace_period_end ? new Date(u.kyc_grace_period_end).toLocaleDateString() : "—"} />
+          <MetaItem label="Reminder Count" value={String(u.kyc_reminder_count ?? 0)} />
         </div>
       </Section>
 

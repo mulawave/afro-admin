@@ -39,8 +39,6 @@ export default function FeatureFlagsPage() {
         try {
           await api.post("/admin/features", { key: flag.key, enabled: !flag.enabled });
           await loadFlags();
-        } catch {
-          // handled by api
         } finally {
           setToggling(null);
         }

@@ -29,6 +29,7 @@ const TITLES = {
   "/ad-analytics": "Ad Analytics & Revenue",
   "/marquee": "Marquee Ticker",
   "/audit": "Audit Trail",
+  "/distribution": "TV Distribution",
 };
 
 export default function Header({ user }) {

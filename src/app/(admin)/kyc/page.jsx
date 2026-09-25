@@ -5,13 +5,14 @@ import { api } from "@/lib/api";
 import DataTable from "@/components/ui/DataTable";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
-const KYC_STATUSES = ["pending", "under_review", "verified", "rejected", "expired"];
+const KYC_STATUSES = ["pending", "under_review", "verified", "rejected", "expired", "minor_pending"];
 const STATUS_COLORS = {
   pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   under_review: "bg-blue-500/15 text-blue-300 border-blue-500/30",
   verified: "bg-green-500/15 text-green-300 border-green-500/30",
   rejected: "bg-red-500/15 text-red-300 border-red-500/30",
   expired: "bg-white/8 text-white/50 border-white/10",
+  minor_pending: "bg-purple-500/15 text-purple-300 border-purple-500/30",
 };
 const ID_LABELS = {
   national_id: "National ID",
@@ -35,6 +36,7 @@ export default function KycPage() {
   const [tab, setTab] = useState("all"); // all | expiring | expired
   const [expiringDays, setExpiringDays] = useState(30);
   const [specialRecords, setSpecialRecords] = useState([]);
+  const [modalImage, setModalImage] = useState(null);
 
   /* ── Data loading ─────────────────────────────────────── */
   const loadRecords = useCallback(async () => {
@@ -175,6 +177,15 @@ export default function KycPage() {
           {(row.status || "pending").replace("_", " ")}
         </span>
       ),
+    },
+    {
+      key: "dob",
+      label: "Date of Birth",
+      render: (row) => row.date_of_birth ? (
+        <span className={`text-xs font-medium ${row.is_minor ? "text-purple-300" : "text-white/70"}`}>
+          {new Date(row.date_of_birth).toLocaleDateString()}{row.is_minor ? " (minor)" : ""}
+        </span>
+      ) : <span className="text-xs text-white/30">—</span>,
     },
     {
       key: "expiry",
@@ -329,7 +340,7 @@ export default function KycPage() {
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Full Name" value={selected.full_name} />
-            <Field label="Date of Birth" value={selected.date_of_birth} />
+            <Field label="Date of Birth" value={selected.date_of_birth ? `${new Date(selected.date_of_birth).toLocaleDateString()}${selected.is_minor ? " (Minor)" : ""}` : "—"} />
             <Field label="Nationality" value={selected.nationality} />
             <Field label="Phone" value={selected.phone} />
             <Field label="Address" value={selected.address} />
@@ -347,32 +358,32 @@ export default function KycPage() {
             )}
           </div>
 
-          {/* Document Images */}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {selected.id_front_url && (
-              <div>
-                <label className="mb-2 block text-xs text-white/50">ID Front</label>
-                <a href={selected.id_front_url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-white/10 overflow-hidden hover:border-sky-400/30 transition">
-                  <img src={selected.id_front_url} alt="ID Front" className="w-full h-40 object-cover" />
-                </a>
-              </div>
-            )}
-            {selected.id_back_url && (
-              <div>
-                <label className="mb-2 block text-xs text-white/50">ID Back</label>
-                <a href={selected.id_back_url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-white/10 overflow-hidden hover:border-sky-400/30 transition">
-                  <img src={selected.id_back_url} alt="ID Back" className="w-full h-40 object-cover" />
-                </a>
-              </div>
-            )}
-            {selected.selfie_url && (
-              <div>
-                <label className="mb-2 block text-xs text-white/50">Selfie / Biometric</label>
-                <a href={selected.selfie_url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-white/10 overflow-hidden hover:border-sky-400/30 transition">
-                  <img src={selected.selfie_url} alt="Selfie" className="w-full h-40 object-cover" />
-                </a>
-              </div>
-            )}
+          {/* Document Images — Full display, click to open modal */}
+          <div className="mt-6">
+            <h3 className="mb-3 text-sm font-semibold text-white/80">Uploaded Documents</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {selected.id_front_url && (
+                <DocCard
+                  label="ID Front"
+                  url={selected.id_front_url}
+                  onClick={() => setModalImage({ url: selected.id_front_url, label: "ID Front" })}
+                />
+              )}
+              {selected.id_back_url && (
+                <DocCard
+                  label="ID Back"
+                  url={selected.id_back_url}
+                  onClick={() => setModalImage({ url: selected.id_back_url, label: "ID Back" })}
+                />
+              )}
+              {selected.selfie_url && (
+                <DocCard
+                  label="Selfie / Biometric"
+                  url={selected.selfie_url}
+                  onClick={() => setModalImage({ url: selected.selfie_url, label: "Selfie / Biometric" })}
+                />
+              )}
+            </div>
           </div>
 
           {/* Actions */}
@@ -397,6 +408,15 @@ export default function KycPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Image Modal Viewer */}
+      {modalImage && (
+        <ImageModal
+          url={modalImage.url}
+          label={modalImage.label}
+          onClose={() => setModalImage(null)}
+        />
       )}
 
       {/* Confirm */}
@@ -424,6 +444,89 @@ function Field({ label, value }) {
     <div>
       <label className="mb-1 block text-xs text-white/50">{label}</label>
       <p className="text-sm text-white">{value || "—"}</p>
+    </div>
+  );
+}
+
+function DocCard({ label, url, onClick }) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs text-white/50">{label}</label>
+      <button
+        onClick={onClick}
+        className="group block w-full overflow-hidden rounded-xl border border-white/10 hover:border-sky-400/40 transition-all"
+      >
+        <div className="relative aspect-[3/2] w-full bg-white/5">
+          <img
+            src={url}
+            alt={label}
+            className="h-full w-full object-contain"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
+            <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">
+              Click to view full
+            </span>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function ImageModal({ url, label, onClose }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex w-full items-center justify-between gap-4">
+          <span className="text-sm font-semibold text-white/90">{label}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setZoomed((v) => !v)}
+              className="rounded-lg border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/15"
+            >
+              {zoomed ? "Fit" : "Zoom"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/15"
+            >
+              Close ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="flex max-h-[calc(95vh-60px)] items-center justify-center overflow-auto rounded-2xl border border-white/10 bg-black/50">
+          <img
+            src={url}
+            alt={label}
+            className={zoomed
+              ? "max-w-none cursor-zoom-out"
+              : "max-h-[calc(95vh-60px)] max-w-[95vw] cursor-zoom-in object-contain"
+            }
+            onClick={() => setZoomed((v) => !v)}
+          />
+        </div>
+      </div>
     </div>
   );
 }

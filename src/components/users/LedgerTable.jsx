@@ -15,16 +15,17 @@ const TYPE_COLORS = {
 export default function LedgerTable({ data, showUser = false }) {
   const [filter, setFilter] = useState("all");
 
-  const types = ["all", ...new Set(data.map((l) => l.type).filter(Boolean))];
+  const rows = Array.isArray(data) ? data : [];
+  const types = ["all", ...new Set(rows.map((l) => l.type).filter(Boolean))];
 
-  const filtered = filter === "all" ? data : data.filter((l) => l.type === filter);
+  const filtered = filter === "all" ? rows : rows.filter((l) => l.type === filter);
   const pagination = useTablePagination(filtered, { defaultPageSize: 10 });
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-white/78">
-          Ledger {data.length > 0 && `(${filtered.length})`}
+          Ledger {rows.length > 0 && `(${filtered.length})`}
         </h3>
 
         {types.length > 2 && (

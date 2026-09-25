@@ -8,7 +8,6 @@ export default function WalletCard({ wallet, user, onUpdate }) {
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("ngn");
   const [confirm, setConfirm] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   function requestAdjust() {
@@ -21,25 +20,35 @@ export default function WalletCard({ wallet, user, onUpdate }) {
     const currencyLabel = currency === "ngn" ? "₦" : "vPT";
 
     setError(null);
+    // One idempotency key per confirm dialog — a slow response plus a
+    // repeated click (button was never disabled mid-request before) or a
+    // client-side retry now applies at most once server-side.
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`;
     setConfirm({
       title: `Fund ${currencyLabel}${parsed.toLocaleString("en-NG")}`,
       message: `Credit ${currencyLabel}${parsed.toLocaleString("en-NG")} to ${user.email}'s ${currency.toUpperCase()} balance? This action will be written to the ledger.`,
+      busy: false,
       action: async () => {
-        setLoading(true);
+        setConfirm((current) => (current ? { ...current, busy: true, error: null } : current));
         try {
           await api.post("/withdrawals/fund", {
             uid: user.id ?? user.uid,
+            idempotency_key: idempotencyKey,
             ...(currency === "ngn"
               ? { amount_ngn: parsed }
               : { amount_vpt_units: parsed }),
           });
           setAmount("");
           setError(null);
+          setConfirm(null);
           if (onUpdate) onUpdate();
         } catch (err) {
-          setError(err.message || "Adjustment failed");
-        } finally {
-          setLoading(false);
+          setConfirm((current) =>
+            current ? { ...current, busy: false, error: err.message || "Adjustment failed" } : current
+          );
         }
       },
     });
@@ -111,11 +120,10 @@ export default function WalletCard({ wallet, user, onUpdate }) {
 
           <button
             onClick={requestAdjust}
-            disabled={loading || !amount}
+            disabled={!amount}
             className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-2 text-sm font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105 disabled:opacity-50"
           >
-            {loading && <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--av-dark-blue)]/30 border-t-[var(--av-dark-blue)]/80" />}
-            {loading ? "Funding..." : "Credit Wallet"}
+            Credit Wallet
           </button>
 
           <p className="text-xs text-white/38">Balance removal is intentionally excluded here. Use ledger reversals for auditable corrections.</p>
@@ -126,10 +134,11 @@ export default function WalletCard({ wallet, user, onUpdate }) {
         open={Boolean(confirm)}
         title={confirm?.title ?? ""}
         message={confirm?.message ?? ""}
-        onCancel={() => setConfirm(null)}
-        onConfirm={async () => {
-          if (confirm?.action) await confirm.action();
-          setConfirm(null);
+        busy={confirm?.busy}
+        error={confirm?.error}
+        onCancel={() => (confirm?.busy ? null : setConfirm(null))}
+        onConfirm={() => {
+          if (confirm?.action && !confirm.busy) confirm.action();
         }}
       />
     </>

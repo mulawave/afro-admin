@@ -16,8 +16,25 @@ function normalizePageSizeOptions(pageSizeOptions) {
   )].sort((left, right) => left - right);
 }
 
+function getStorageKey(storageKey) {
+  if (storageKey) return `av-pagination:${storageKey}`;
+  if (typeof window !== "undefined") return `av-pagination:${window.location.pathname}`;
+  return null;
+}
+
+function readStoredState(storageKey, fallbackPageSize) {
+  if (!storageKey) return null;
+  try {
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {}
+  return null;
+}
+
 export default function useTablePagination(rows, options = {}) {
-  const { pageSizeOptions, defaultPageSize } = options;
+  const { pageSizeOptions, defaultPageSize, storageKey } = options;
 
   const normalizedPageSizeOptions = useMemo(
     () => normalizePageSizeOptions(pageSizeOptions),
@@ -28,8 +45,20 @@ export default function useTablePagination(rows, options = {}) {
     ? defaultPageSize
     : normalizedPageSizeOptions[0];
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(resolvedDefaultPageSize);
+  const resolvedStorageKey = getStorageKey(storageKey);
+  const stored = readStoredState(resolvedStorageKey, resolvedDefaultPageSize);
+
+  const [page, setPage] = useState(stored?.page ?? 1);
+  const [pageSize, setPageSize] = useState(
+    normalizedPageSizeOptions.includes(stored?.pageSize) ? stored.pageSize : resolvedDefaultPageSize,
+  );
+
+  useEffect(() => {
+    if (!resolvedStorageKey) return;
+    try {
+      sessionStorage.setItem(resolvedStorageKey, JSON.stringify({ page, pageSize }));
+    } catch {}
+  }, [resolvedStorageKey, page, pageSize]);
 
   useEffect(() => {
     if (!normalizedPageSizeOptions.includes(pageSize)) {

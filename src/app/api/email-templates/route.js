@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { requireAdmin } from "@/lib/server/adminAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,10 @@ function templateNameFromId(id) {
  * GET /api/email-templates
  * Returns list of { id, name } for every .html file in email_templates/.
  */
-export async function GET() {
+export async function GET(request) {
+  const auth = await requireAdmin(request);
+  if (auth.response) return auth.response;
+
   try {
     ensureDir();
     const files = fs
@@ -51,6 +55,9 @@ export async function GET() {
  * Saves or creates a template file.
  */
 export async function POST(request) {
+  const auth = await requireAdmin(request);
+  if (auth.response) return auth.response;
+
   try {
     ensureDir();
     const body = await request.json();

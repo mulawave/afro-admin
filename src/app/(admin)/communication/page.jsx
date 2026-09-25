@@ -37,6 +37,15 @@ export default function CommunicationPage() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  // Audience preview state
+  const [audiencePreview, setAudiencePreview] = useState(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceError, setAudienceError] = useState(null);
+  // Delivery results state (populated after a send)
+  const [emailDelivery, setEmailDelivery] = useState(null);
+  const [pushDelivery, setPushDelivery] = useState(null);
+  // Right panel tab
+  const [resultsTab, setResultsTab] = useState("audience");
 
   useEffect(() => {
     let active = true;
@@ -65,10 +74,42 @@ export default function CommunicationPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    async function loadAudiencePreview() {
+      try {
+        setAudienceLoading(true);
+        const data = await api.get("/admin/communication/audience-preview");
+        if (!active) return;
+        setAudiencePreview(data);
+        setAudienceError(null);
+      } catch (err) {
+        if (!active) return;
+        setAudienceError(err.message || "Failed to load audience data");
+      } finally {
+        if (active) setAudienceLoading(false);
+      }
+    }
+    loadAudiencePreview();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     const preselectedRecipient = searchParams.get("recipient") || "";
     if (preselectedRecipient) {
       setMode("direct");
       setSelectedUserId(preselectedRecipient);
+
+      (async () => {
+        try {
+          const detail = await api.get(`/admin/users/${encodeURIComponent(preselectedRecipient)}/detail`);
+          if (detail?.user) {
+            setUsers((prev) => {
+              if (prev.some((u) => u.id === preselectedRecipient)) return prev;
+              return [...prev, { ...detail.user, id: preselectedRecipient }];
+            });
+          }
+        } catch {}
+      })();
     }
   }, [searchParams]);
 
@@ -108,7 +149,7 @@ export default function CommunicationPage() {
     const q = userSearch.trim().toLowerCase();
     return users.filter((user) => {
       if (!q) return true;
-      return [user.name, user.email, user.id]
+      return [user.name, user.firstName, user.lastName, user.email, user.id, user.vpinId, user.mobile]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -120,7 +161,7 @@ export default function CommunicationPage() {
     const q = emailUserSearch.trim().toLowerCase();
     return users.filter((user) => {
       if (!q) return true;
-      return [user.name, user.email, user.id]
+      return [user.name, user.firstName, user.lastName, user.email, user.id, user.vpinId, user.mobile]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -176,6 +217,15 @@ export default function CommunicationPage() {
               subject: emailSubject.trim(),
               html: selectedTemplate.html,
             });
+            setEmailDelivery({
+              sent: res.sent ?? 0,
+              failed: res.failed ?? 0,
+              total: res.total ?? 0,
+              recipients: res.recipients ?? [],
+              subject: emailSubject.trim(),
+              timestamp: Date.now(),
+            });
+            setResultsTab("emailResults");
             setEmailResult({
               success: true,
               text: `Broadcast complete — ${res.sent ?? 0} sent, ${res.failed ?? 0} failed out of ${res.total ?? 0} users.`,
@@ -230,6 +280,16 @@ export default function CommunicationPage() {
               source: "push",
               link: link.trim() || undefined,
             });
+            setPushDelivery({
+              targeted: response.result?.targeted || 0,
+              persisted: response.result?.persisted || 0,
+              successCount: response.result?.successCount || 0,
+              failureCount: response.result?.failureCount || 0,
+              recipients: response.result?.recipients ?? [],
+              title: title.trim(),
+              timestamp: Date.now(),
+            });
+            setResultsTab("pushResults");
             setResult({
               success: true,
               text: `Broadcast sent to ${response.result?.persisted || 0} inboxes with ${response.result?.successCount || 0} push successes.`,
@@ -265,6 +325,8 @@ export default function CommunicationPage() {
 
       <NoticeBanner tone="error" message={usersError} />
 
+      <div className="grid gap-6 xl:grid-cols-[1fr_440px]">
+      {/* ─── Left Column: Compose ─── */}
       <div className="space-y-5 rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-6 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div>
           <label className="mb-2 block text-sm font-medium text-white/75">Workspace</label>
@@ -608,11 +670,6 @@ export default function CommunicationPage() {
             </div>
           </>
         )}
-      </div>
-
-      <div className="rounded-[1.5rem] border border-[var(--av-light-orange)]/20 bg-[rgba(245,193,108,0.08)] px-4 py-3 text-sm text-white/72">
-        Every send is persisted to the inbox and now recorded in the audit trail with delivery counts.
-      </div>
 
       {/* Email template live preview — visible only in the Templates workspace */}
       {workspace === "templates" && renderedEmailPreview && (
@@ -626,6 +683,243 @@ export default function CommunicationPage() {
           />
         </div>
       )}
+      </div>
+
+      {/* ─── Right Column: Audience & Delivery Results ─── */}
+      <div className="space-y-4 rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+        {/* Tab switcher */}
+        <div className="flex gap-2">
+          {[
+            { value: "audience", label: "Audience" },
+            { value: "emailResults", label: "Email Results" },
+            { value: "pushResults", label: "Push Results" },
+          ].map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setResultsTab(tab.value)}
+              className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
+                resultsTab === tab.value
+                  ? "border-[var(--av-light-orange)]/40 bg-[rgba(245,193,108,0.12)] text-white"
+                  : "border-white/10 bg-white/6 text-white/55 hover:bg-white/10"
+              }`}
+            >
+              {tab.label}
+              {tab.value === "emailResults" && emailDelivery && (
+                <span className="ml-1.5 inline-block rounded-full bg-[var(--av-light-orange)]/20 px-1.5 text-[10px] text-[var(--av-light-orange)]">{emailDelivery.recipients.length}</span>
+              )}
+              {tab.value === "pushResults" && pushDelivery && (
+                <span className="ml-1.5 inline-block rounded-full bg-[var(--av-light-orange)]/20 px-1.5 text-[10px] text-[var(--av-light-orange)]">{pushDelivery.recipients.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ─── Audience Tab ─── */}
+        {resultsTab === "audience" && (
+          <div className="space-y-4">
+            {audienceLoading ? (
+              <div className="flex items-center gap-2 text-sm text-white/45">
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+                Loading audience data...
+              </div>
+            ) : audienceError ? (
+              <NoticeBanner tone="error" message={audienceError} />
+            ) : audiencePreview ? (
+              <>
+                {/* Summary cards */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center">
+                    <p className="text-2xl font-bold text-white">{audiencePreview.summary.totalUsers}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">Total Users</p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--av-light-orange)]/20 bg-[rgba(245,193,108,0.06)] p-3 text-center">
+                    <p className="text-2xl font-bold text-[var(--av-light-orange)]">{audiencePreview.summary.withEmail}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">With Email</p>
+                  </div>
+                  <div className="rounded-xl border border-blue-400/20 bg-blue-500/[0.06] p-3 text-center">
+                    <p className="text-2xl font-bold text-blue-300">{audiencePreview.summary.withPush}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">With Push</p>
+                  </div>
+                </div>
+
+                {/* Gap explanation */}
+                {(audiencePreview.summary.withoutEmail > 0 || audiencePreview.summary.withoutPush > 0) && (
+                  <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200/80">
+                    {audiencePreview.summary.withoutEmail > 0 && (
+                      <p>{audiencePreview.summary.withoutEmail} users have no email address on record and cannot receive email broadcasts.</p>
+                    )}
+                    {audiencePreview.summary.withoutPush > 0 && (
+                      <p>{audiencePreview.summary.withoutPush} users have no registered device tokens and cannot receive push notifications.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Email recipients list */}
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">
+                    Email Recipients ({audiencePreview.emailRecipients.length})
+                  </h3>
+                  <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+                    {audiencePreview.emailRecipients.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-white">{r.name || r.email}</p>
+                          <p className="truncate text-[10px] text-white/40">{r.email}</p>
+                        </div>
+                        <span className="ml-2 shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] text-emerald-300">email</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Push recipients list */}
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">
+                    Push Recipients ({audiencePreview.pushRecipients.length})
+                  </h3>
+                  <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+                    {audiencePreview.pushRecipients.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-white">{r.name || r.email || r.id}</p>
+                          <p className="truncate text-[10px] text-white/40">{r.email || "No email"}</p>
+                        </div>
+                        <span className="ml-2 shrink-0 rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] text-blue-300">{r.tokenCount} device{r.tokenCount !== 1 ? "s" : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-white/45">No audience data available.</div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Email Results Tab ─── */}
+        {resultsTab === "emailResults" && (
+          <div className="space-y-4">
+            {!emailDelivery ? (
+              <div className="py-8 text-center text-sm text-white/40">
+                No email broadcast sent yet. Send an email broadcast to see delivery results here.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center">
+                    <p className="text-2xl font-bold text-white">{emailDelivery.total}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">Targeted</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-3 text-center">
+                    <p className="text-2xl font-bold text-emerald-300">{emailDelivery.sent}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">Sent</p>
+                  </div>
+                  <div className="rounded-xl border border-red-400/20 bg-red-500/[0.06] p-3 text-center">
+                    <p className="text-2xl font-bold text-red-300">{emailDelivery.failed}</p>
+                    <p className="mt-0.5 text-[10px] text-white/45">Failed</p>
+                  </div>
+                </div>
+
+                {emailDelivery.subject && (
+                  <p className="text-xs text-white/50">Subject: <span className="text-white/75">{emailDelivery.subject}</span></p>
+                )}
+
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">
+                    Recipients ({emailDelivery.recipients.length})
+                  </h3>
+                  <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
+                    {emailDelivery.recipients.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-white">{r.name || r.email}</p>
+                          <p className="truncate text-[10px] text-white/40">{r.email}</p>
+                          {r.error && <p className="truncate text-[10px] text-red-300/70">{r.error}</p>}
+                        </div>
+                        <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[9px] ${
+                          r.status === "sent"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-red-500/15 text-red-300"
+                        }`}>{r.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ─── Push Results Tab ─── */}
+        {resultsTab === "pushResults" && (
+          <div className="space-y-4">
+            {!pushDelivery ? (
+              <div className="py-8 text-center text-sm text-white/40">
+                No push broadcast sent yet. Send a notice broadcast to see delivery results here.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-center">
+                    <p className="text-xl font-bold text-white">{pushDelivery.targeted}</p>
+                    <p className="mt-0.5 text-[9px] text-white/45">Targeted</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-center">
+                    <p className="text-xl font-bold text-white">{pushDelivery.persisted}</p>
+                    <p className="mt-0.5 text-[9px] text-white/45">Inbox</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-2 text-center">
+                    <p className="text-xl font-bold text-emerald-300">{pushDelivery.successCount}</p>
+                    <p className="mt-0.5 text-[9px] text-white/45">Push OK</p>
+                  </div>
+                  <div className="rounded-xl border border-red-400/20 bg-red-500/[0.06] p-2 text-center">
+                    <p className="text-xl font-bold text-red-300">{pushDelivery.failureCount}</p>
+                    <p className="mt-0.5 text-[9px] text-white/45">Push Fail</p>
+                  </div>
+                </div>
+
+                {pushDelivery.title && (
+                  <p className="text-xs text-white/50">Notice: <span className="text-white/75">{pushDelivery.title}</span></p>
+                )}
+
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">
+                    Device Recipients ({pushDelivery.recipients.length})
+                  </h3>
+                  <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
+                    {pushDelivery.recipients.map((r) => (
+                      <div key={r.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-medium text-white">{r.name || r.email || r.id}</p>
+                            <p className="truncate text-[10px] text-white/40">{r.email || "No email"}</p>
+                          </div>
+                          <span className="ml-2 shrink-0 rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] text-blue-300">{r.tokenCount} device{r.tokenCount !== 1 ? "s" : ""}</span>
+                        </div>
+                        {r.tokens.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {r.tokens.map((token, i) => (
+                              <span key={i} className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[8px] text-white/35">
+                                {token.length > 20 ? `${token.slice(0, 12)}...${token.slice(-6)}` : token}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      </div>
+
+      <div className="rounded-[1.5rem] border border-[var(--av-light-orange)]/20 bg-[rgba(245,193,108,0.08)] px-4 py-3 text-sm text-white/72">
+        Every send is persisted to the inbox and now recorded in the audit trail with delivery counts.
+      </div>
 
       {/* Confirm Dialog */}
       <ConfirmDialog

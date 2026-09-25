@@ -11,6 +11,7 @@ export default function MarqueePage() {
   const [editing, setEditing] = useState(null); // topic being edited, or { _new: true } for create
   const [form, setForm] = useState({ text: "", priority: 1, active: true });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
   const load = useCallback(async () => {
@@ -42,12 +43,14 @@ export default function MarqueePage() {
 
   function cancelEdit() {
     setEditing(null);
+    setSaveError(null);
     setForm({ text: "", priority: 1, active: true });
   }
 
   async function handleSave() {
     if (!form.text.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       if (editing._new) {
         await api.post("/admin/marquee", form);
@@ -56,8 +59,8 @@ export default function MarqueePage() {
       }
       cancelEdit();
       await load();
-    } catch {
-      // handled by api
+    } catch (err) {
+      setSaveError(err.message || "Save failed. Please retry.");
     } finally {
       setSaving(false);
     }
@@ -165,6 +168,9 @@ export default function MarqueePage() {
                 </div>
               </div>
             </div>
+            {saveError && (
+              <p role="alert" className="rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{saveError}</p>
+            )}
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handleSave}

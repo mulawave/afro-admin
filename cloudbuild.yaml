@@ -36,7 +36,7 @@ steps:
       - '--port'
       - '8080'
       - '--set-env-vars'
-      - 'NEXT_PUBLIC_API_BASE_URL=https://afrovision-backend-134538542038.us-central1.run.app,API_BASE_URL=https://afrovision-backend-134538542038.us-central1.run.app'
+      - 'NEXT_PUBLIC_API_BASE_URL=https://afrovision-backend-134538542038.us-central1.run.app,API_BASE_URL=https://afrovision-backend-134538542038.us-central1.run.app,ODS_API_BASE_URL=https://ods-api-134538542038.us-central1.run.app'
 
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/afrovision-admin'

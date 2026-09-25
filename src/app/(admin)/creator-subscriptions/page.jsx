@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import DataTable from "@/components/ui/DataTable";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -8,6 +9,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import NoticeBanner from "@/components/ui/NoticeBanner";
 
 export default function CreatorSubscriptionsPage() {
+  const router = useRouter();
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,12 @@ export default function CreatorSubscriptionsPage() {
       label: "Subscriber",
       render: (row) => (
         <div>
-          <div className="font-medium text-white">{row.subscriber_display_name}</div>
+          <button
+            onClick={() => row.subscriber_uid && router.push(`/users?uid=${encodeURIComponent(row.subscriber_uid)}`)}
+            className="font-medium text-sky-300 hover:text-sky-200 hover:underline transition-colors"
+          >
+            {row.subscriber_display_name}
+          </button>
           <div className="text-xs text-white/45">{row.subscriber?.email || row.subscriber_uid}</div>
         </div>
       ),
@@ -103,7 +110,12 @@ export default function CreatorSubscriptionsPage() {
       label: "Creator",
       render: (row) => (
         <div>
-          <div className="font-medium text-white">{row.creator_display_name}</div>
+          <button
+            onClick={() => row.creator_uid && router.push(`/users?uid=${encodeURIComponent(row.creator_uid)}`)}
+            className="font-medium text-sky-300 hover:text-sky-200 hover:underline transition-colors"
+          >
+            {row.creator_display_name}
+          </button>
           <div className="text-xs text-white/45">{row.creator?.email || row.creator_uid}</div>
         </div>
       ),

@@ -30,6 +30,10 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
   const [kycStatus, setKycStatus] = useState("none");
   const [isPremium, setIsPremium] = useState(false);
   const [navLoading, setNavLoading] = useState(false);
+  const [debitAmount, setDebitAmount] = useState("");
+  const [debitCurrency, setDebitCurrency] = useState("ngn");
+  const [debitReason, setDebitReason] = useState("");
+  const [banReason, setBanReason] = useState("");
 
   const userId = user?.id ?? user?.uid;
 
@@ -57,7 +61,7 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
         api.get(`/withdrawals/admin/user/${userId}/transactions`),
       ]);
       setWallet(w.wallet ?? w);
-      setLedger(l.entries ?? []);
+      setLedger(Array.isArray(l.entries) ? l.entries : []);
     } catch {
       setWallet(null);
       setLedger([]);
@@ -114,6 +118,36 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
     });
   }
 
+  function debitUserAssets() {
+    const amt = parseFloat(debitAmount);
+    if (!amt || amt <= 0) { setFeedback({ tone: "error", message: "Enter a valid amount" }); return; }
+    setConfirm({
+      title: "Debit User Assets",
+      message: `Debit ${debitCurrency.toUpperCase()} ${amt.toLocaleString()} from ${user?.email}'s balance?${debitReason ? ` Reason: ${debitReason}` : ""} This moves money and cannot be undone from here.`,
+      destructive: true,
+      busy: false,
+      error: null,
+      confirmLabel: "Debit",
+      action: async () => {
+        setConfirm((current) => ({ ...current, busy: true, error: null }));
+        setActionLoading(true);
+        try {
+          await api.post(`/admin/users/${userId}/debit`, { amount: amt, currency: debitCurrency, reason: debitReason || undefined });
+          setFeedback({ tone: "success", message: `Debited ${debitCurrency.toUpperCase()} ${amt.toLocaleString()} successfully.` });
+          setDebitAmount(""); setDebitReason("");
+          await loadDetail(); await loadWallet();
+          if (onUpdated) await onUpdated();
+          return true;
+        } catch (err) {
+          setConfirm((current) => ({ ...current, busy: false, error: err.message || "Debit failed" }));
+          return false;
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
   function deleteUser() {
     setConfirm({
       title: "Delete User",
@@ -143,9 +177,9 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
 
   const displayName = detail
     ? [detail.firstName, detail.middleName, detail.lastName].filter(Boolean).join(" ") || detail.name || detail.email
-    : user?.name || user?.email || "—";
+    : user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "—";
 
-  const profilePic = detail?.profilePicture;
+  const profilePic = detail?.profilePicture || detail?.avatar_url || user?.avatar_url || user?.profilePicture;
 
   return (
     <>
@@ -155,14 +189,16 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
             {/* Enhanced Header */}
             <div className="flex items-center gap-4">
               {profilePic ? (
-                <img
-                  src={profilePic}
-                  alt={displayName}
-                  className="h-14 w-14 rounded-full border-2 border-white/10 object-cover"
-                />
+                <a href={profilePic} target="_blank" rel="noopener noreferrer" className="block shrink-0" title="Click to view full image">
+                  <img
+                    src={profilePic}
+                    alt={displayName}
+                    className="h-14 w-14 rounded-full border-2 border-white/10 object-cover transition hover:border-[var(--av-light-orange)] hover:ring-2 hover:ring-[var(--av-light-orange)]/30"
+                  />
+                </a>
               ) : (
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] text-sm font-bold text-[var(--av-dark-blue)]">
-                  {(user.email?.[0] || "?").toUpperCase()}
+                  {(displayName?.[0] || user?.email?.[0] || "?").toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -172,7 +208,7 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                     <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20" />
                   )}
                 </div>
-                <p className="text-xs text-white/45">{user.email}</p>
+                <p className="text-xs text-white/45">{detail?.email || user?.email}</p>
                 <p className="font-mono text-[11px] text-white/30">UID: {userId}</p>
               </div>
 
@@ -182,6 +218,12 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                 </span>
                 {detail?.isVerified && (
                   <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-200">Verified</span>
+                )}
+                {(detail || user)?.is_banned && (
+                  <span className="rounded-full bg-red-500/10 px-2.5 py-0.5 text-[11px] font-medium text-red-200">Banned</span>
+                )}
+                {(detail || user)?.wallet_frozen && (
+                  <span className="rounded-full bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-200">Wallet Frozen</span>
                 )}
               </div>
             </div>
@@ -236,6 +278,204 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                   <SystemTab detail={detail || user} subcollections={subcollections} />
                 )}
               </>
+            )}
+
+            {/* Admin Controls */}
+            {!loading && (
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-white/78">Admin Controls</h3>
+
+                {/* Ban / Unban */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <input
+                      type="text"
+                      placeholder="Ban reason (optional)"
+                      value={banReason}
+                      onChange={(e) => setBanReason(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
+                    />
+                  </div>
+                  {((detail || user)?.is_banned) ? (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/unban`, {});
+                          setFeedback({ tone: "success", message: "User unbanned." });
+                          setBanReason("");
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) {
+                          setFeedback({ tone: "error", message: err.message || "Failed to unban" });
+                        } finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                    >Unban User</button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/ban`, { reason: banReason || undefined });
+                          setFeedback({ tone: "success", message: "User banned." });
+                          setBanReason("");
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) {
+                          setFeedback({ tone: "error", message: err.message || "Failed to ban" });
+                        } finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
+                    >Ban User</button>
+                  )}
+                </div>
+
+                {/* Wallet & Withdrawal Controls */}
+                <div className="flex flex-wrap gap-2">
+                  {((detail || user)?.wallet_frozen) ? (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/unfreeze-wallet`, {});
+                          setFeedback({ tone: "success", message: "Wallet unfrozen." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >Unfreeze Wallet</button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/freeze-wallet`, {});
+                          setFeedback({ tone: "success", message: "Wallet frozen." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-200 hover:bg-sky-500/20 disabled:opacity-50"
+                    >Freeze Wallet</button>
+                  )}
+                  {((detail || user)?.withdrawal_banned) ? (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/unban-withdrawal`, {});
+                          setFeedback({ tone: "success", message: "Withdrawals re-enabled." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >Unban Withdrawals</button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/ban-withdrawal`, {});
+                          setFeedback({ tone: "success", message: "Withdrawals banned." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                    >Ban Withdrawals</button>
+                  )}
+                  {((detail || user)?.channel_creation_banned) ? (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/unban-channel-creation`, {});
+                          setFeedback({ tone: "success", message: "Channel creation re-enabled." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >Unban Channel Creation</button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                          await api.post(`/admin/users/${userId}/ban-channel-creation`, { reason: banReason || undefined });
+                          setFeedback({ tone: "success", message: "Channel creation banned." });
+                          await loadDetail();
+                          if (onUpdated) await onUpdated();
+                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-500/20 disabled:opacity-50"
+                    >Ban Channel Creation</button>
+                  )}
+                </div>
+
+                {/* Debit Assets */}
+                <div className="border-t border-white/8 pt-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-white/42">Debit User Assets</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[120px]">
+                      <label className="block text-[11px] text-white/42 mb-1">Amount</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={debitAmount}
+                        onChange={(e) => setDebitAmount(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
+                      />
+                    </div>
+                    <div className="min-w-[100px]">
+                      <label className="block text-[11px] text-white/42 mb-1">Currency</label>
+                      <select
+                        value={debitCurrency}
+                        onChange={(e) => setDebitCurrency(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none"
+                      >
+                        <option value="ngn" className="bg-[var(--admin-surface)]">NGN (Cash)</option>
+                        <option value="vpt" className="bg-[var(--admin-surface)]">VPT</option>
+                        <option value="coins" className="bg-[var(--admin-surface)]">Coins</option>
+                      </select>
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                      <label className="block text-[11px] text-white/42 mb-1">Reason</label>
+                      <input
+                        type="text"
+                        placeholder="Reason for debit"
+                        value={debitReason}
+                        onChange={(e) => setDebitReason(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
+                      />
+                    </div>
+                    <button
+                      onClick={debitUserAssets}
+                      disabled={actionLoading}
+                      className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
+                    >Debit</button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Action buttons — always visible */}

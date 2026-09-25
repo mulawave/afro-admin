@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import DataTable from "@/components/ui/DataTable";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -33,11 +34,11 @@ function StreamStatusBadge({ status }) {
   if (!status || status === "unknown") return null;
   const config = {
     live: { label: "Live", cls: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300", dot: true },
-    valid: { label: "Valid", cls: "border-sky-400/30 bg-sky-500/10 text-sky-300" },
+    valid: { label: "Reachable", cls: "border-sky-400/30 bg-sky-500/10 text-sky-300" },
     scheduled: { label: "Scheduled", cls: "border-amber-400/30 bg-amber-500/10 text-amber-300" },
-    offline: { label: "Offline", cls: "border-red-400/30 bg-red-500/10 text-red-300" },
-    invalid: { label: "Invalid", cls: "border-red-400/30 bg-red-500/10 text-red-300" },
-    access_denied: { label: "Blocked", cls: "border-red-400/30 bg-red-500/10 text-red-300" },
+    offline: { label: "Probe Failed", cls: "border-amber-400/30 bg-amber-500/10 text-amber-300" },
+    invalid: { label: "Probe Failed", cls: "border-amber-400/30 bg-amber-500/10 text-amber-300" },
+    access_denied: { label: "Probe Blocked", cls: "border-amber-400/30 bg-amber-500/10 text-amber-300" },
   }[status] || { label: status, cls: "border-white/10 bg-white/6 text-white/50" };
 
   return (
@@ -528,6 +529,7 @@ function OwnerDisplayModal({ channel, onClose, onUpdated }) {
 // â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function ChannelsPage() {
   const [channels, setChannels] = useState([]);
+  const [channelCounts, setChannelCounts] = useState({ total: 0, active: 0, disabled: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
@@ -542,12 +544,15 @@ export default function ChannelsPage() {
   const [backfillResult, setBackfillResult] = useState(null);
   const [bulkRechecking, setBulkRechecking] = useState(false);
   const [bulkRecheckResult, setBulkRecheckResult] = useState(null);
+  const [cleaningEvents, setCleaningEvents] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState(null);
 
   const loadChannels = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get("/admin/channels");
       setChannels(res.channels ?? []);
+      setChannelCounts({ total: res.total ?? 0, active: res.active ?? 0, disabled: res.disabled ?? 0 });
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load channels");
@@ -579,8 +584,6 @@ export default function ChannelsPage() {
         try {
           await api.post(`/admin/channels/${channel.id}/${channel.is_active ? "disable" : "enable"}`);
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -607,8 +610,6 @@ export default function ChannelsPage() {
             access_duration_minutes: channel.access_duration_minutes || 120,
           });
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -650,16 +651,88 @@ export default function ChannelsPage() {
     }
   }
 
+  async function handleCleanupEvents() {
+    setCleanupResult(null);
+    setCleaningEvents(true);
+    try {
+      const res = await api.post("/admin/channels/cleanup-orphaned-events");
+      setCleanupResult({
+        ok: true,
+        message: `Cleanup complete — scanned ${res.scanned} event${res.scanned !== 1 ? "s" : ""}, deleted ${res.deleted} orphaned, ${res.remaining} valid remaining.`,
+      });
+    } catch (err) {
+      setCleanupResult({ ok: false, message: err.message || "Cleanup failed" });
+    } finally {
+      setCleaningEvents(false);
+      setTimeout(() => setCleanupResult(null), 8000);
+    }
+  }
+
   async function recheckSource(channel) {
     setRecheckingId(channel.id);
     try {
       const res = await api.post(`/admin/channels/${channel.id}/recheck-source`);
       updateChannel(res.channel);
-    } catch {
-      // handled by api
+    } catch (err) {
+      setBulkRecheckResult({ ok: false, message: `Recheck failed for "${channel.name}": ${err.message || "unknown error"}` });
+      setTimeout(() => setBulkRecheckResult(null), 6000);
     } finally {
       setRecheckingId(null);
     }
+  }
+
+  function hardDeleteChannel(channel) {
+    setConfirm({
+      title: "Permanently Delete Channel",
+      message: `Permanently delete "${channel.name}"? This will remove the channel and all associated stats/events from the database. This action CANNOT be undone.`,
+      destructive: true,
+      confirmLabel: "Delete Permanently",
+      action: async () => {
+        setActionLoading(true);
+        try {
+          await api.delete(`/admin/channels/${channel.id}`, { confirm: "DELETE" });
+          await loadChannels();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
+  function banChannel(channel) {
+    setConfirm({
+      title: "Ban Channel",
+      message: `Ban "${channel.name}"? The channel will be hidden and the creator will be restricted from this channel.`,
+      destructive: true,
+      confirmLabel: "Ban Channel",
+      action: async () => {
+        setActionLoading(true);
+        try {
+          await api.post(`/admin/channels/${channel.id}/ban`, {});
+          await loadChannels();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
+  function unbanChannel(channel) {
+    setConfirm({
+      title: "Unban Channel",
+      message: `Unban "${channel.name}"? The channel will become accessible again.`,
+      destructive: false,
+      confirmLabel: "Unban Channel",
+      action: async () => {
+        setActionLoading(true);
+        try {
+          await api.post(`/admin/channels/${channel.id}/unban`, {});
+          await loadChannels();
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   }
 
   const isImported = (c) => c.stream_source_mode && c.stream_source_mode !== "native";
@@ -756,7 +829,10 @@ export default function ChannelsPage() {
     {
       key: "status",
       label: "Status",
-      render: (row) => <StatusBadge status={row.is_active ? "active" : "disabled"} />,
+      render: (row) => {
+        if (row.is_banned) return <StatusBadge status="banned" />;
+        return <StatusBadge status={row.is_active ? "active" : "disabled"} />;
+      },
     },
     {
       key: "premium",
@@ -793,6 +869,14 @@ export default function ChannelsPage() {
           >
             Owner Display
           </button>
+          {row.type === "exclusive" && (
+            <button
+              onClick={() => router.push(`/channels/${row.id}/subscribers`)}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-300 hover:text-emerald-200"
+            >
+              Manage Subscribers
+            </button>
+          )}
           {isImported(row) && (
             <>
               <button
@@ -813,6 +897,36 @@ export default function ChannelsPage() {
               </button>
             </>
           )}
+          <Link
+            href={`/channels/${row.id}`}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-300 hover:text-indigo-200"
+          >
+            Audit
+          </Link>
+          {row.is_banned ? (
+            <button
+              onClick={() => unbanChannel(row)}
+              disabled={actionLoading}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-50"
+            >
+              Unban
+            </button>
+          ) : (
+            <button
+              onClick={() => banChannel(row)}
+              disabled={actionLoading}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-red-300 hover:text-red-200 disabled:opacity-50"
+            >
+              Ban
+            </button>
+          )}
+          <button
+            onClick={() => hardDeleteChannel(row)}
+            disabled={actionLoading}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-red-400/70 hover:text-red-300 disabled:opacity-50"
+          >
+            Delete
+          </button>
         </div>
       ),
     },
@@ -827,7 +941,7 @@ export default function ChannelsPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
-            {filtered.length} channel{filtered.length !== 1 ? "s" : ""}
+            {channelCounts.total} total · {channelCounts.active} active · {channelCounts.disabled} disabled
           </span>
           <button
             onClick={handleBackfill}
@@ -840,6 +954,18 @@ export default function ChannelsPage() {
               : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" /></svg>
             }
             {backfilling ? "Backfilling..." : "Backfill Defaults"}
+          </button>
+          <button
+            onClick={handleCleanupEvents}
+            disabled={cleaningEvents}
+            title="Remove channel events (reactions/gifts) sent to user UIDs instead of channel IDs"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
+          >
+            {cleaningEvents
+              ? <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current/30 border-t-current" />
+              : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298A.75.75 0 0 0 3 5.24v.07c0 .67.092 1.318.265 1.935L3.072 7.5H16.928l.007-.255c.173-.617.265-1.265.265-1.935v-.07a.75.75 0 0 0-.635-.749A41.76 41.76 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM5.5 9a.75.75 0 0 0-1.5 0v6.25A2.75 2.75 0 0 0 6.75 18h6.5A2.75 2.75 0 0 0 16 15.25V9a.75.75 0 0 0-1.5 0v6.25c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25V9Z" clipRule="evenodd" /></svg>
+            }
+            {cleaningEvents ? "Cleaning..." : "Cleanup Events"}
           </button>
           <button
             onClick={() => setShowImportModal(true)}
@@ -934,23 +1060,13 @@ export default function ChannelsPage() {
         </div>
       )}
 
-      {backfillResult && (
+      {cleanupResult && (
         <div className={`rounded-[1.5rem] border px-4 py-3 text-sm ${
-          backfillResult.ok
+          cleanupResult.ok
             ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
             : "border-red-400/30 bg-red-500/10 text-red-200"
         }`}>
-          {backfillResult.message}
-        </div>
-      )}
-
-      {bulkRecheckResult && (
-        <div className={`rounded-[1.5rem] border px-4 py-3 text-sm ${
-          bulkRecheckResult.ok
-            ? "border-violet-400/30 bg-violet-500/10 text-violet-200"
-            : "border-red-400/30 bg-red-500/10 text-red-200"
-        }`}>
-          {bulkRecheckResult.message}
+          {cleanupResult.message}
         </div>
       )}
 
@@ -963,6 +1079,8 @@ export default function ChannelsPage() {
         title={confirm?.title || ""}
         message={confirm?.message || ""}
         destructive={confirm?.destructive}
+        confirmLabel={confirm?.confirmLabel || "Confirm"}
+        busy={actionLoading}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
           if (confirm?.action) await confirm.action();
@@ -1002,6 +1120,14 @@ export default function ChannelsPage() {
           }}
         />
       )}
+
     </div>
   );
+}
+
+function fmtNum(val) {
+  if (val === null || val === undefined || val === "") return "0";
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  return num.toLocaleString("en-NG", { maximumFractionDigits: 2 });
 }
