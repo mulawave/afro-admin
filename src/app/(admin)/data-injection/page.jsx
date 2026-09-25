@@ -14,39 +14,91 @@ import {
   removeWaveReplays,
 } from "@/services/dataInjection";
 
-function AmountAction({ label, busy, onInject, onRemove }) {
-  const [amount, setAmount] = useState("");
+// Per-action limits; keep in sync with the backend (admin.controller.js).
+const MAX_VIEWS_PER_ACTION = 1000000;
+const MAX_FOLLOWERS_PER_ACTION = 100000;
 
-  const parsed = Number(amount);
-  const valid = Number.isFinite(parsed) && parsed > 0;
+// Amounts at or above this need a second click, to catch typos (e.g. an extra
+// zero) without adding a modal to every routine adjustment.
+const CONFIRM_THRESHOLD = 10000;
+const CONFIRM_WINDOW_MS = 5000;
+
+function formatCount(n) {
+  return Number(n || 0).toLocaleString("en-NG");
+}
+
+function AmountAction({ label, busy, max, onInject, onRemove }) {
+  const [amount, setAmount] = useState("");
+  const [pending, setPending] = useState(null); // "inject" | "remove" awaiting second click
+
+  const trimmed = amount.trim();
+  const isWhole = /^\d+$/.test(trimmed);
+  const parsed = isWhole ? Number(trimmed) : NaN;
+  const valid = isWhole && parsed > 0 && parsed <= max;
+  const hint = !trimmed
+    ? null
+    : !isWhole
+      ? "Whole numbers only."
+      : parsed <= 0
+        ? "Amount must be at least 1."
+        : parsed > max
+          ? `Max ${formatCount(max)} per action.`
+          : null;
+
+  useEffect(() => {
+    if (!pending) return undefined;
+    const timer = setTimeout(() => setPending(null), CONFIRM_WINDOW_MS);
+    return () => clearTimeout(timer);
+  }, [pending]);
+
+  function onAmountChange(value) {
+    setAmount(value);
+    setPending(null);
+  }
+
+  function trigger(kind) {
+    if (!valid || busy) return;
+    if (parsed >= CONFIRM_THRESHOLD && pending !== kind) {
+      setPending(kind);
+      return;
+    }
+    setPending(null);
+    const handler = kind === "inject" ? onInject : onRemove;
+    handler(parsed).then((ok) => {
+      if (ok) setAmount("");
+    });
+  }
 
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
       <p className="mb-3 text-sm font-semibold text-white/80">{label}</p>
       <div className="flex flex-wrap items-center gap-2">
         <input
-          type="number"
-          min="1"
+          type="text"
+          inputMode="numeric"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => onAmountChange(e.target.value)}
           placeholder="Amount"
+          aria-invalid={Boolean(hint)}
           className="w-32 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white placeholder:text-white/35 focus:border-[var(--av-light-orange)]/50 focus:outline-none"
         />
         <button
           disabled={!valid || busy}
-          onClick={() => onInject(parsed).then(() => setAmount(""))}
+          onClick={() => trigger("inject")}
           className="rounded-xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3.5 py-2 text-sm font-medium text-[var(--av-dark-blue)] disabled:opacity-40"
         >
-          Inject
+          {pending === "inject" ? `Confirm +${formatCount(parsed)}` : "Inject"}
         </button>
         <button
           disabled={!valid || busy}
-          onClick={() => onRemove(parsed).then(() => setAmount(""))}
+          onClick={() => trigger("remove")}
           className="rounded-xl border border-red-400/30 bg-red-500/10 px-3.5 py-2 text-sm font-medium text-red-300 disabled:opacity-40"
         >
-          Remove
+          {pending === "remove" ? `Confirm −${formatCount(parsed)}` : "Remove"}
         </button>
       </div>
+      {hint ? <p className="mt-2 text-xs text-amber-200/80">{hint}</p> : null}
+      {pending ? <p className="mt-2 text-xs text-white/45">Large amount. Click again within 5s to confirm.</p> : null}
     </div>
   );
 }
@@ -81,24 +133,35 @@ function ChannelsTab() {
       .slice(0, 20);
   }, [channels, search]);
 
-  const run = useCallback(async (action, successMessage) => {
+  // Latest counts per channel, taken from each action's response. Avoids
+  // re-reading the whole channel collection after every adjustment.
+  const [counts, setCounts] = useState({});
+
+  const run = useCallback(async (channelId, action, successMessage) => {
     setBusy(true);
     setMessage(null);
     setError(null);
     try {
       const res = await action();
       setMessage(successMessage(res));
-      // Refresh followers/views snapshot for the selected channel
-      const res2 = await searchChannels();
-      setChannels(res2.channels || []);
-      const refreshed = (res2.channels || []).find((c) => c.id === selected?.id);
-      if (refreshed) setSelected(refreshed);
+      setCounts((prev) => ({
+        ...prev,
+        [channelId]: {
+          ...prev[channelId],
+          ...(res.total_views != null ? { views: res.total_views } : {}),
+          ...(res.followers_count != null ? { followers: res.followers_count } : {}),
+        },
+      }));
+      return true;
     } catch (err) {
       setError(err.message || "Action failed");
+      return false;
     } finally {
       setBusy(false);
     }
-  }, [selected]);
+  }, []);
+
+  const selectedCounts = selected ? counts[selected.id] : null;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,320px)_1fr]">
@@ -141,6 +204,14 @@ function ChannelsTab() {
             <div className="rounded-[1.75rem] border border-white/8 bg-[var(--admin-surface)] p-5">
               <h3 className="text-lg font-semibold text-white">{selected.name || "Untitled channel"}</h3>
               <p className="text-sm text-white/48">{selected.owner_email || selected.owner_id}</p>
+              {selectedCounts ? (
+                <p className="mt-2 text-xs text-white/35">
+                  {[
+                    selectedCounts.views != null ? `Views: ${formatCount(selectedCounts.views)}` : null,
+                    selectedCounts.followers != null ? `Followers: ${formatCount(selectedCounts.followers)}` : null,
+                  ].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
             </div>
 
             {message && <p className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200">{message}</p>}
@@ -149,18 +220,21 @@ function ChannelsTab() {
             <AmountAction
               label="Channel Views"
               busy={busy}
-              onInject={(amount) => run(() => injectChannelViews(selected.id, amount), (res) => `Injected — total views now ${res.total_views.toLocaleString("en-NG")}`)}
-              onRemove={(amount) => run(() => removeChannelViews(selected.id, amount), (res) => `Removed — total views now ${res.total_views.toLocaleString("en-NG")}`)}
+              max={MAX_VIEWS_PER_ACTION}
+              onInject={(amount) => run(selected.id, () => injectChannelViews(selected.id, amount), (res) => `Injected ${formatCount(amount)} — total views now ${formatCount(res.total_views)}`)}
+              onRemove={(amount) => run(selected.id, () => removeChannelViews(selected.id, amount), (res) => `Removed ${formatCount(amount)} — total views now ${formatCount(res.total_views)}`)}
             />
 
             <AmountAction
               label="Channel Followers"
               busy={busy}
-              onInject={(amount) => run(() => injectChannelFollowers(selected.id, amount), (res) => `Injected — followers now ${res.followers_count.toLocaleString("en-NG")}`)}
-              onRemove={(amount) => run(() => removeChannelFollowers(selected.id, amount), (res) => `${res.message} — followers now ${res.followers_count.toLocaleString("en-NG")}`)}
+              max={MAX_FOLLOWERS_PER_ACTION}
+              onInject={(amount) => run(selected.id, () => injectChannelFollowers(selected.id, amount), (res) => `Injected ${formatCount(amount)} — followers now ${formatCount(res.followers_count)}`)}
+              onRemove={(amount) => run(selected.id, () => removeChannelFollowers(selected.id, amount), (res) => `${res.message} — followers now ${formatCount(res.followers_count)}`)}
             />
             <p className="text-xs text-white/35">
               Follower removal only deletes admin-injected followers — real subscribers are never touched.
+              Each injected follower is a stored record, so large follower injections add database writes.
             </p>
           </div>
         )}
@@ -215,16 +289,24 @@ function WavesTab() {
     }
   }, [query, loadRecent]);
 
-  const run = useCallback(async (action, successMessage) => {
+  const run = useCallback(async (waveId, action, successMessage) => {
     setBusy(true);
     setMessage(null);
     setError(null);
     try {
       const res = await action();
       setMessage(successMessage(res));
-      setSelected((prev) => (prev ? { ...prev, views_count: res.views_count ?? prev.views_count, repeat_play_count: res.repeat_play_count ?? prev.repeat_play_count } : prev));
+      const patch = (w) => ({
+        ...w,
+        views_count: res.views_count ?? w.views_count,
+        repeat_play_count: res.repeat_play_count ?? w.repeat_play_count,
+      });
+      setSelected((prev) => (prev ? patch(prev) : prev));
+      setWaves((prev) => prev.map((w) => (w.id === waveId ? patch(w) : w)));
+      return true;
     } catch (err) {
       setError(err.message || "Action failed");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -291,15 +373,17 @@ function WavesTab() {
             <AmountAction
               label="Wave Views"
               busy={busy}
-              onInject={(amount) => run(() => injectWaveViews(selected.id, amount), (res) => `Injected — views now ${res.views_count.toLocaleString("en-NG")}`)}
-              onRemove={(amount) => run(() => removeWaveViews(selected.id, amount), (res) => `Removed — views now ${res.views_count.toLocaleString("en-NG")}`)}
+              max={MAX_VIEWS_PER_ACTION}
+              onInject={(amount) => run(selected.id, () => injectWaveViews(selected.id, amount), (res) => `Injected ${formatCount(amount)} — views now ${formatCount(res.views_count)}`)}
+              onRemove={(amount) => run(selected.id, () => removeWaveViews(selected.id, amount), (res) => `Removed ${formatCount(amount)} — views now ${formatCount(res.views_count)}`)}
             />
 
             <AmountAction
               label="Wave Replays"
               busy={busy}
-              onInject={(amount) => run(() => injectWaveReplays(selected.id, amount), (res) => `Injected — replays now ${res.repeat_play_count.toLocaleString("en-NG")}`)}
-              onRemove={(amount) => run(() => removeWaveReplays(selected.id, amount), (res) => `Removed — replays now ${res.repeat_play_count.toLocaleString("en-NG")}`)}
+              max={MAX_VIEWS_PER_ACTION}
+              onInject={(amount) => run(selected.id, () => injectWaveReplays(selected.id, amount), (res) => `Injected ${formatCount(amount)} — replays now ${formatCount(res.repeat_play_count)}`)}
+              onRemove={(amount) => run(selected.id, () => removeWaveReplays(selected.id, amount), (res) => `Removed ${formatCount(amount)} — replays now ${formatCount(res.repeat_play_count)}`)}
             />
           </div>
         )}
