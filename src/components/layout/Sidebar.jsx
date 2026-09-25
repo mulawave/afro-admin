@@ -44,6 +44,16 @@ const links = [
   { name: "TV Distribution", path: "/distribution", tone: "Distribution" },
   { name: "Settings", path: "/settings", tone: "Infrastructure" },
   { name: "Audit", path: "/audit", tone: "Infrastructure" },
+  // Obroh Download Suite: same admin login, ODS- prefixed pages.
+  { name: "ODS-Dashboard", path: "/ods-dashboard", tone: "ODS" },
+  { name: "ODS-Users", path: "/ods-users", tone: "ODS" },
+  { name: "ODS-Payments", path: "/ods-payments", tone: "ODS" },
+  { name: "ODS-Vouchers", path: "/ods-vouchers", tone: "ODS" },
+  { name: "ODS-Config", path: "/ods-config", tone: "ODS" },
+  { name: "ODS-Settings", path: "/ods-settings", tone: "ODS" },
+  { name: "ODS-Announcements", path: "/ods-announcements", tone: "ODS" },
+  { name: "ODS-Public Pool", path: "/ods-pool", tone: "ODS" },
+  { name: "ODS-Audit", path: "/ods-audit", tone: "ODS" },
 ];
 
 export default function Sidebar() {
