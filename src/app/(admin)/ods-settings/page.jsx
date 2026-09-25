@@ -15,7 +15,7 @@ export default function OdsSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <OdsHeader title="ODS-Settings" subtitle="Paystack payment keys for ODS. Switch test/live and rotate keys without an app release; changes take effect within a minute." />
+      <OdsHeader title="ODS-Settings" subtitle="Payment and ad keys for ODS. Keys are write-only, stored in Secret Manager, and take effect within a minute without an app release." />
       <ErrorNote error={error} onRetry={reload} />
       {loading && !data ? <Spinner /> : null}
 
@@ -50,6 +50,8 @@ export default function OdsSettingsPage() {
             ))}
           </div>
 
+          <PangleCard />
+
           <Card title="Webhook">
             <p className="text-sm text-white/70">
               In the Paystack dashboard, set the webhook URL to <code className="rounded bg-black/30 px-1.5 py-0.5 text-xs">{"<ods-api URL>"}/v1/webhooks/paystack</code>. Paystack signs it with the active secret key, so nothing else needs configuring.
@@ -69,6 +71,55 @@ export default function OdsSettingsPage() {
         onConfirm={async () => setData(await ods.setPaystackMode(modeDialog))}
       />
     </div>
+  );
+}
+
+function PangleCard() {
+  const { data, error, reload, setData } = useAsync(() => ods.pangleSettings(), []);
+  const [key, setKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    try {
+      setData(await ods.savePangleKey(key.trim()));
+      setKey("");
+      setMsg({ ok: true, text: "Saved. Rewarded-ad credits are verified with this key from now on." });
+    } catch (err) {
+      setMsg({ ok: false, text: err.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Pangle rewarded ads" subtitle="Security key from the Pangle console (server-side reward verification). Used to verify every ad reward before vPT is credited.">
+      <ErrorNote error={error} onRetry={reload} />
+      {data ? (
+        <p className="mb-4 text-sm text-white/70">
+          {data.configured ? (
+            <>
+              Key saved: <span className="font-mono">…{data.last4}</span> · fingerprint <span className="font-mono text-xs">{data.fingerprint}</span>
+              {data.updatedAt ? ` · updated ${formatDate(data.updatedAt)}` : ""}
+            </>
+          ) : (
+            <span className="text-amber-200">No key saved yet. Ad rewards are not credited until one is added.</span>
+          )}
+        </p>
+      ) : null}
+      <form onSubmit={save} className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[260px] flex-1">
+          <Field label={data?.configured ? "Replace security key" : "Security key"} hint="Write-only. It is never shown again after saving.">
+            <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} className={inputClass} placeholder="Paste the Pangle security key" />
+          </Field>
+        </div>
+        <Button type="submit" disabled={saving || key.trim().length < 8}>{saving ? "Saving..." : "Save key"}</Button>
+      </form>
+      {msg ? <p className={`mt-3 text-sm ${msg.ok ? "text-emerald-200" : "text-red-200"}`}>{msg.text}</p> : null}
+    </Card>
   );
 }
 

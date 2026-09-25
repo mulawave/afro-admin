@@ -72,6 +72,8 @@ export const ods = {
   savePaystackKeys: (body) => request("settings/payments/keys", { method: "PUT", body }),
   setPaystackMode: (mode) => request("settings/payments/mode", { method: "PUT", body: { mode } }),
   testPaystack: (mode) => request("settings/payments/test", { method: "POST", body: { mode } }),
+  pangleSettings: () => request("settings/pangle"),
+  savePangleKey: (securityKey) => request("settings/pangle", { method: "PUT", body: { securityKey } }),
 
   // Vouchers
   voucherBatches: () => request("vouchers/batches"),
