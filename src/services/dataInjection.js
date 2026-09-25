@@ -21,6 +21,15 @@ export function removeChannelFollowers(channelId, amount) {
   return api.post(`/admin/channels/${channelId}/followers/remove`, { amount });
 }
 
+// Legacy synthetic followers (old one-document-per-fake-follower storage)
+export function getLegacySyntheticFollowers() {
+  return api.get("/admin/synthetic-followers/legacy");
+}
+
+export function convertLegacySyntheticFollowers() {
+  return api.post("/admin/synthetic-followers/convert", {});
+}
+
 // Waves
 export function searchWaves({ waveId, channelId, limit } = {}) {
   const params = new URLSearchParams();

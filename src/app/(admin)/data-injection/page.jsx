@@ -7,6 +7,8 @@ import {
   removeChannelViews,
   injectChannelFollowers,
   removeChannelFollowers,
+  getLegacySyntheticFollowers,
+  convertLegacySyntheticFollowers,
   searchWaves,
   injectWaveViews,
   removeWaveViews,
@@ -16,7 +18,7 @@ import {
 
 // Per-action limits; keep in sync with the backend (admin.controller.js).
 const MAX_VIEWS_PER_ACTION = 1000000;
-const MAX_FOLLOWERS_PER_ACTION = 100000;
+const MAX_FOLLOWERS_PER_ACTION = 10000;
 
 // Amounts at or above this need a second click, to catch typos (e.g. an extra
 // zero) without adding a modal to every routine adjustment.
@@ -234,7 +236,7 @@ function ChannelsTab() {
             />
             <p className="text-xs text-white/35">
               Follower removal only deletes admin-injected followers — real subscribers are never touched.
-              Each injected follower is a stored record, so large follower injections add database writes.
+              Injected followers are a single counter per channel, not stored records.
             </p>
           </div>
         )}
@@ -392,6 +394,72 @@ function WavesTab() {
   );
 }
 
+function LegacyFollowerCleanup() {
+  const [state, setState] = useState({ status: "idle", converted: 0, remaining: null, error: null });
+
+  async function run() {
+    setState({ status: "running", converted: 0, remaining: null, error: null });
+    try {
+      const { remaining } = await getLegacySyntheticFollowers();
+      if (!remaining) {
+        setState({ status: "done", converted: 0, remaining: 0, error: null });
+        return;
+      }
+      let converted = 0;
+      let left = remaining;
+      // Each call converts up to 2,000 docs server-side; loop until none remain.
+      while (left > 0) {
+        const res = await convertLegacySyntheticFollowers();
+        converted += res.converted || 0;
+        left = res.remaining || 0;
+        setState({ status: "running", converted, remaining: left, error: null });
+        if (!res.converted) break;
+      }
+      setState({ status: "done", converted, remaining: left, error: null });
+    } catch (err) {
+      setState((prev) => ({ ...prev, status: "error", error: err.message || "Conversion failed" }));
+    }
+  }
+
+  const running = state.status === "running";
+
+  return (
+    <div className="rounded-[1.75rem] border border-white/8 bg-[var(--admin-surface)] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white/80">Old fake-follower records</p>
+          <p className="text-xs text-white/45">
+            Earlier injections stored one database record per fake follower. This deletes those records and keeps each
+            channel&apos;s follower count the same, as a single counter.
+          </p>
+        </div>
+        <button
+          onClick={run}
+          disabled={running}
+          className="shrink-0 rounded-xl border border-white/10 bg-white/6 px-3.5 py-2 text-sm font-medium text-white/80 hover:bg-white/10 disabled:opacity-40"
+        >
+          {running ? "Converting..." : "Check & convert"}
+        </button>
+      </div>
+      {state.status === "running" && state.remaining != null ? (
+        <p className="mt-2 text-xs text-white/55">Converted {formatCount(state.converted)} so far, {formatCount(state.remaining)} left...</p>
+      ) : null}
+      {state.status === "done" ? (
+        <p className="mt-2 text-xs text-emerald-200">
+          {state.converted
+            ? `Done — converted ${formatCount(state.converted)} records. ${state.remaining ? `${formatCount(state.remaining)} still remaining; run again.` : "None left."}`
+            : "No old records found. Nothing to convert."}
+        </p>
+      ) : null}
+      {state.status === "error" ? (
+        <p role="alert" className="mt-2 text-xs text-red-200">
+          {state.error}. Converted {formatCount(state.converted)} before the error; running again is safe.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function DataInjectionPage() {
   const [tab, setTab] = useState("channels");
 
@@ -418,6 +486,8 @@ export default function DataInjectionPage() {
           </button>
         ))}
       </div>
+
+      {tab === "channels" ? <LegacyFollowerCleanup /> : null}
 
       {tab === "channels" ? <ChannelsTab /> : <WavesTab />}
     </div>
