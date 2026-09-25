@@ -12,7 +12,7 @@ const TYPE_COLORS = {
   adjustment: "text-amber-200 bg-amber-500/10",
 };
 
-export default function LedgerTable({ data, showUser = false }) {
+export default function LedgerTable({ data, showUser = false, hideTypeFilter = false }) {
   const [filter, setFilter] = useState("all");
 
   const rows = Array.isArray(data) ? data : [];
@@ -28,7 +28,7 @@ export default function LedgerTable({ data, showUser = false }) {
           Ledger {rows.length > 0 && `(${filtered.length})`}
         </h3>
 
-        {types.length > 2 && (
+        {!hideTypeFilter && types.length > 2 && (
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

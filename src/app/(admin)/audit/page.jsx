@@ -7,31 +7,60 @@ import DataTable from "@/components/ui/DataTable";
 export default function AuditPage() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState("");
+  const [nextBefore, setNextBefore] = useState(null);
+  // Every action name seen so far, so the filter list doesn't shrink when filtering.
+  const [knownActions, setKnownActions] = useState([]);
+
+  // Server-side paging: newest first, 50 per page, action filter applied by the backend.
+  const fetchPage = useCallback(async (before) => {
+    const qs = new URLSearchParams({ limit: "50" });
+    if (filterAction) qs.set("action", filterAction);
+    if (before) qs.set("before", String(before));
+    return api.get(`/admin/audit?${qs.toString()}`);
+  }, [filterAction]);
 
   const loadLogs = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/audit");
+      const res = await fetchPage(null);
       setLogs(res.logs ?? []);
+      setNextBefore(res.nextBefore ?? null);
+      setKnownActions((prev) => [...new Set([...prev, ...(res.logs ?? []).map((l) => l.action).filter(Boolean)])].sort());
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load audit logs");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchPage]);
+
+  const loadOlder = useCallback(async () => {
+    if (!nextBefore) return;
+    try {
+      setLoadingMore(true);
+      const res = await fetchPage(nextBefore);
+      setLogs((prev) => [...prev, ...(res.logs ?? [])]);
+      setNextBefore(res.nextBefore ?? null);
+      setKnownActions((prev) => [...new Set([...prev, ...(res.logs ?? []).map((l) => l.action).filter(Boolean)])].sort());
+    } catch (err) {
+      setError(err.message || "Failed to load older audit logs");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchPage, nextBefore]);
 
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
 
-  const actions = [...new Set(logs.map((l) => l.action).filter(Boolean))];
+  const actions = knownActions.includes(filterAction) || !filterAction ? knownActions : [...knownActions, filterAction];
 
+  // Text search narrows the entries already loaded (use "Load older" to search further back).
   const filtered = logs.filter((l) => {
-    if (filterAction && l.action !== filterAction) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return buildSearchText(l).includes(q);
@@ -81,14 +110,14 @@ export default function AuditPage() {
           <p className="mt-2 text-sm text-white/58">Immutable records for sensitive operator actions across the platform.</p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
-          {filtered.length} entr{filtered.length !== 1 ? "ies" : "y"}
+          {filtered.length} entr{filtered.length !== 1 ? "ies" : "y"} loaded{nextBefore ? " · more available" : ""}
         </span>
       </div>
 
       <div className="flex flex-col gap-3 rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl md:flex-row">
         <input
           type="text"
-          placeholder="Search by action, admin, or target..."
+          placeholder="Search loaded entries by action, admin, or target..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white outline-none placeholder:text-white/32"
@@ -119,8 +148,20 @@ export default function AuditPage() {
       )}
 
       {!loading && !error && (
-        <DataTable columns={columns} rows={filtered} emptyMessage="No audit logs found" />
+        <DataTable columns={columns} rows={filtered} emptyMessage="No audit logs found" defaultPageSize={25} />
       )}
+
+      {!loading && !error && nextBefore ? (
+        <div className="flex justify-center">
+          <button
+            onClick={loadOlder}
+            disabled={loadingMore}
+            className="rounded-2xl border border-white/10 bg-white/6 px-5 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 disabled:opacity-40"
+          >
+            {loadingMore ? "Loading..." : "Load older entries"}
+          </button>
+        </div>
+      ) : null}
 
       <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
         Audit logs are immutable. Every admin action is recorded automatically.
