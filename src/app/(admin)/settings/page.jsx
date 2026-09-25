@@ -40,8 +40,6 @@ export default function SettingsPage() {
         try {
           await api.patch(`/admin/settings/${key}`, { value });
           await load();
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }

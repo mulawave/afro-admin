@@ -13,6 +13,7 @@ export default function AnnouncementsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: "", body: "", icon: "campaign", color: "#FF9800", priority: "normal", is_active: true });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
   const load = useCallback(async () => {
@@ -51,12 +52,14 @@ export default function AnnouncementsPage() {
 
   function cancelEdit() {
     setEditing(null);
+    setSaveError(null);
     setForm({ title: "", body: "", icon: "campaign", color: "#FF9800", priority: "normal", is_active: true });
   }
 
   async function handleSave() {
     if (!form.title.trim() || !form.body.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       if (editing._new) {
         await api.post("/announcements/admin/create", form);
@@ -65,8 +68,8 @@ export default function AnnouncementsPage() {
       }
       cancelEdit();
       await load();
-    } catch {
-      // handled by api
+    } catch (err) {
+      setSaveError(err.message || "Save failed. Please retry.");
     } finally {
       setSaving(false);
     }
@@ -216,6 +219,9 @@ export default function AnnouncementsPage() {
                 </div>
               </div>
             </div>
+            {saveError && (
+              <p role="alert" className="rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{saveError}</p>
+            )}
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handleSave}

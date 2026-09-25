@@ -584,8 +584,6 @@ export default function ChannelsPage() {
         try {
           await api.post(`/admin/channels/${channel.id}/${channel.is_active ? "disable" : "enable"}`);
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -612,8 +610,6 @@ export default function ChannelsPage() {
             access_duration_minutes: channel.access_duration_minutes || 120,
           });
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -677,8 +673,9 @@ export default function ChannelsPage() {
     try {
       const res = await api.post(`/admin/channels/${channel.id}/recheck-source`);
       updateChannel(res.channel);
-    } catch {
-      // handled by api
+    } catch (err) {
+      setBulkRecheckResult({ ok: false, message: `Recheck failed for "${channel.name}": ${err.message || "unknown error"}` });
+      setTimeout(() => setBulkRecheckResult(null), 6000);
     } finally {
       setRecheckingId(null);
     }
@@ -695,8 +692,6 @@ export default function ChannelsPage() {
         try {
           await api.delete(`/admin/channels/${channel.id}`, { confirm: "DELETE" });
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -715,8 +710,6 @@ export default function ChannelsPage() {
         try {
           await api.post(`/admin/channels/${channel.id}/ban`, {});
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }
@@ -735,8 +728,6 @@ export default function ChannelsPage() {
         try {
           await api.post(`/admin/channels/${channel.id}/unban`, {});
           await loadChannels();
-        } catch {
-          // handled by api
         } finally {
           setActionLoading(false);
         }

@@ -56,8 +56,6 @@ export default function BlockchainPage() {
         try {
           await api.patch(`/admin/settings/${key}`, { value });
           await load();
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }
@@ -79,8 +77,6 @@ export default function BlockchainPage() {
         try {
           await api.patch("/admin/settings/TREASURY_PRIVATE_KEY", { value });
           await load();
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }

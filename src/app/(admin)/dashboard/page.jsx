@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const [regStats, setRegStats] = useState(null);
   const [withdrawalsDisabled, setWithdrawalsDisabled] = useState(false);
   const [togglingWithdrawals, setTogglingWithdrawals] = useState(false);
+  const [withdrawalsError, setWithdrawalsError] = useState(null);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -205,10 +206,13 @@ export default function DashboardPage() {
           <button
             onClick={async () => {
               setTogglingWithdrawals(true);
+              setWithdrawalsError(null);
               try {
                 await api.post("/admin/settings/withdrawals-toggle", { enabled: !withdrawalsDisabled });
-                setWithdrawalsDisabled(!withdrawalsDisabled);
-              } catch {}
+                await fetchStats();
+              } catch (err) {
+                setWithdrawalsError(err.message || "Failed to change withdrawal status. Current state unchanged.");
+              }
               finally { setTogglingWithdrawals(false); }
             }}
             disabled={togglingWithdrawals}
@@ -222,6 +226,9 @@ export default function DashboardPage() {
             {withdrawalsDisabled ? "Enable Withdrawals" : "Disable Withdrawals"}
           </button>
         </div>
+        {withdrawalsError && (
+          <p role="alert" className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{withdrawalsError}</p>
+        )}
       </div>
     </div>
   );

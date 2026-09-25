@@ -50,8 +50,6 @@ export default function CopyrightReportsPage() {
           if (selected?.trackingId === trackingId) {
             setSelected((prev) => ({ ...prev, status: newStatus }));
           }
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }

@@ -60,8 +60,6 @@ export default function EconomyPage() {
         try {
           await api.patch(`/admin/settings/${key}`, { value });
           await load();
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }

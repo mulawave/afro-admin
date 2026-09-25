@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getBackendBase, requireAdmin } from "@/lib/server/adminAuth";
 
 export const dynamic = "force-dynamic";
 
 const TEMPLATES_DIR = path.resolve(process.cwd(), "email_templates");
-
-function getBackendBase() {
-  return (
-    process.env.API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://afrovision-backend-134538542038.us-central1.run.app"
-  ).replace(/\/$/, "");
-}
 
 function withVars(html, vars = {}) {
   return html
@@ -26,6 +19,9 @@ function withVars(html, vars = {}) {
  * Renders the template with vars then sends via the backend SMTP service.
  */
 export async function POST(request) {
+  const auth = await requireAdmin(request);
+  if (auth.response) return auth.response;
+
   try {
     const body       = await request.json();
     const templateId = String(body?.templateId || "").trim();
@@ -47,7 +43,7 @@ export async function POST(request) {
     const subject  = `AfroVision — Test email: ${safe.replace(/[-_]/g, " ").replace(/\.html$/, "")}`;
 
     // Forward to backend
-    const token    = request.headers.get("authorization") || "";
+    const token    = auth.authorization;
     const backendUrl = `${getBackendBase()}/admin/email/send`;
 
     const backendRes = await fetch(backendUrl, {

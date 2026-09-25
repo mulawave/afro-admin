@@ -133,8 +133,6 @@ export default function AdvertisementsPage() {
               if (updated) setSelected(updated);
             }
           }
-        } catch {
-          // handled by api
         } finally {
           setSaving(null);
         }

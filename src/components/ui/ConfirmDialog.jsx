@@ -1,5 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+// If onConfirm throws, the dialog stays open and shows the error, so a failed
+// sensitive action is never silently dismissed. Callers let errors propagate
+// out of onConfirm instead of catching them.
 export default function ConfirmDialog({
   open,
   title,
@@ -12,7 +17,32 @@ export default function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
 }) {
+  const [running, setRunning] = useState(false);
+  const [actionError, setActionError] = useState(null);
+
+  useEffect(() => {
+    if (!open) {
+      setRunning(false);
+      setActionError(null);
+    }
+  }, [open]);
+
   if (!open) return null;
+
+  const isBusy = busy || running;
+  const shownError = actionError || error;
+
+  async function handleConfirm() {
+    setActionError(null);
+    setRunning(true);
+    try {
+      await onConfirm?.();
+    } catch (err) {
+      setActionError(err?.message || "Action failed. Please retry.");
+    } finally {
+      setRunning(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -22,29 +52,29 @@ export default function ConfirmDialog({
         <h3 className="mb-2 text-lg font-semibold text-white">{title}</h3>
         <p className="mb-6 text-sm leading-6 text-white/66">{message}</p>
 
-        {error ? <p className="mb-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
+        {shownError ? <p role="alert" className="mb-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{shownError}</p> : null}
 
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}
-            disabled={busy}
+            disabled={isBusy}
             className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-medium text-white/78 transition-colors hover:bg-white/10"
           >
             {cancelLabel}
           </button>
           <button
-            onClick={onConfirm}
-            disabled={busy}
+            onClick={handleConfirm}
+            disabled={isBusy}
             className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium text-white transition-colors ${
               destructive
                 ? "bg-red-600 hover:bg-red-500"
                 : "bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] text-[var(--av-dark-blue)] hover:brightness-105"
             }`}
           >
-            {busy && (
+            {isBusy && (
               <span className={`h-4 w-4 animate-spin rounded-full border-b-2 ${destructive ? "border-white" : "border-[var(--av-dark-blue)]"}`} />
             )}
-            {busy ? "Working..." : confirmLabel}
+            {isBusy ? "Working..." : confirmLabel}
           </button>
         </div>
       </div>
