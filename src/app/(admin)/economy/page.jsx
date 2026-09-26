@@ -159,55 +159,59 @@ export default function EconomyPage() {
 }
 
 /**
- * Split rules as the backend defines them (settings.model.js):
- *   COMMUNITY_POOL_PERCENT  — % of each subscription price to the community pool
- *   VPT_EXTRACTION_PERCENT  — % OF THE COMMUNITY POOL extracted for vPT conversion
- * Both must be 0–100 (enforced by the backend too).
- * NOTE: as of 2026-09-26 no payment code reads these two settings; live
- * splits are fixed in backend code. The banner says so, to avoid false confidence.
+ * Live subscription split (backend: subscriptions/split.js), applied to
+ * creator, channel and viewer-plan subscriptions, Google Play and renewals:
+ *   Subscriber vPT 15% (fixed) · Referrals 15% (fixed)
+ *   Community pool = COMMUNITY_POOL_PERCENT (0–70, default 20)
+ *   Operations = 70 − community
+ * VPT_EXTRACTION_PERCENT has no live money flow (no extraction step exists).
  */
 function SplitSection({ data, saving, onUpdate }) {
   const community = Number(data?.COMMUNITY_POOL_PERCENT ?? 20);
   const extraction = Number(data?.VPT_EXTRACTION_PERCENT ?? 30);
-  const valid = [community, extraction].every((n) => Number.isFinite(n) && n >= 0 && n <= 100);
-  const vptShare = (community * extraction) / 100; // % of each subscription price
-  const communityCash = community - vptShare;
-  const rest = 100 - community;
-  const fmt = (n) => (Number.isInteger(n) ? n : n.toFixed(2));
+  const valid = Number.isFinite(community) && community >= 0 && community <= 70;
+  const operations = valid ? 70 - community : null;
+  const rows = [
+    ["Operations pool", operations, "Platform share; adjusts when Community Pool % changes"],
+    ["Community pool", community, "Set below"],
+    ["Subscriber vPT reward", 15, "Fixed"],
+    ["Referral rewards", 15, "Fixed"],
+  ];
 
   return (
-    <Section title="Split Rules">
-      <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
-        These two percentages are saved but <strong>not yet applied</strong> by the payment code. Live revenue splits are
-        currently fixed in the backend (for example, interactions: creator 50% / operations 30% / community 20%). Changing
-        them here doesn&apos;t move any money until the backend is wired to use them.
-      </div>
+    <Section title="Subscription Split">
+      <p className="mb-4 text-xs leading-5 text-white/55">
+        Applied live to every subscription payment: creator and channel subscriptions, viewer plans, Google Play purchases and renewals.
+        Changes take effect on the next payment.
+      </p>
       <div className="space-y-3">
         <EditableField
-          label="Community Pool % (of price)"
+          label="Community Pool % (0–70)"
           value={community}
           saving={saving === "COMMUNITY_POOL_PERCENT"}
           onSave={(v) => onUpdate("COMMUNITY_POOL_PERCENT", +v, "Community Pool %")}
           type="number"
           percent
+          max={70}
         />
-        <EditableField
-          label="vPT Extraction % (of community pool)"
-          value={extraction}
-          saving={saving === "VPT_EXTRACTION_PERCENT"}
-          onSave={(v) => onUpdate("VPT_EXTRACTION_PERCENT", +v, "vPT Extraction %")}
-          type="number"
-          percent
-        />
-        <div className={`mt-2 rounded-2xl px-3 py-2 text-sm ${valid ? "bg-white/[0.04] text-white/75" : "bg-red-500/10 text-red-200"}`}>
-          {valid ? (
-            <>
-              Of each ₦100 of subscription: <strong className="text-white">₦{fmt(communityCash)}</strong> community pool (cash),{" "}
-              <strong className="text-white">₦{fmt(vptShare)}</strong> converted to vPT, <strong className="text-white">₦{fmt(rest)}</strong> everything else.
-            </>
-          ) : (
-            "Each percentage must be between 0 and 100."
-          )}
+        {valid ? (
+          <div className="rounded-2xl bg-white/[0.04] p-3">
+            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-white/40">Of every ₦100 subscription</p>
+            <div className="space-y-1.5">
+              {rows.map(([label, pct, hint]) => (
+                <div key={label} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-white/75">{label} <span className="text-xs text-white/35">· {hint}</span></span>
+                  <span className="font-mono font-semibold text-white">₦{pct}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-red-500/10 px-3 py-2 text-sm text-red-200">Community Pool % must be between 0 and 70.</div>
+        )}
+        <div className="rounded-2xl border border-white/8 px-3 py-2 text-xs leading-5 text-white/50">
+          <span className="font-medium text-white/65">vPT Extraction % ({Number.isFinite(extraction) ? extraction : "—"}): not used.</span> No live payment
+          converts part of the community pool to vPT, so this setting has nothing to control. It&apos;s kept for reference only.
         </div>
       </div>
     </Section>
@@ -223,7 +227,7 @@ function Section({ title, children }) {
   );
 }
 
-function EditableField({ label, value, onSave, saving, type = "text", readOnly = false, percent = false }) {
+function EditableField({ label, value, onSave, saving, type = "text", readOnly = false, percent = false, max = 100 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(value ?? ""));
   const [fieldError, setFieldError] = useState(null);
@@ -236,8 +240,8 @@ function EditableField({ label, value, onSave, saving, type = "text", readOnly =
     }
     if (percent) {
       const n = Number(val);
-      if (val.trim() === "" || !Number.isFinite(n) || n < 0 || n > 100) {
-        setFieldError("Enter a number from 0 to 100.");
+      if (val.trim() === "" || !Number.isFinite(n) || n < 0 || n > max) {
+        setFieldError(`Enter a number from 0 to ${max}.`);
         return;
       }
     }
@@ -261,7 +265,7 @@ function EditableField({ label, value, onSave, saving, type = "text", readOnly =
             type={type}
             value={val}
             onChange={(e) => { setVal(e.target.value); setFieldError(null); }}
-            {...(percent ? { min: 0, max: 100, step: "any" } : {})}
+            {...(percent ? { min: 0, max, step: "any" } : {})}
             className={`w-40 rounded-2xl border bg-white/6 px-3 py-1.5 text-sm text-white outline-none ${fieldError ? "border-red-400/60" : "border-white/10"}`}
             autoFocus
             title={fieldError || undefined}
