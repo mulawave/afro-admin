@@ -1,10 +1,34 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import StatCard from "@/components/dashboard/StatCard";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import PoolsCard from "@/components/dashboard/PoolsCard";
+
+// Auto-refresh tiers (cost-aware). The fast tier is served from a 60s server
+// cache and a few pool docs; the slow tier runs full collection scans, so it
+// refreshes rarely. Nothing polls while the tab is hidden.
+const FAST_MS = 60 * 1000;
+const SLOW_MS = 10 * 60 * 1000;
+const MAX_BACKOFF_MS = 5 * 60 * 1000;
+const LIVE_KEY = "dashboard_live";
+
+function readLivePref() {
+  try {
+    return window.localStorage.getItem(LIVE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function ago(date, now) {
+  const s = Math.max(0, Math.round((now - date.getTime()) / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} min ago` : date.toLocaleTimeString();
+}
 
 export default function DashboardPage() {
   const [data, setData] = useState(null);
@@ -16,64 +40,105 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchStats = useCallback(async () => {
+  const [live, setLive] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
+  const lastFast = useRef(0);
+  const lastSlow = useRef(0);
+  const failures = useRef(0);
+  const inFlight = useRef(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const settingsRes = await api.get("/admin/settings");
+      const wdSetting = (settingsRes.settings || []).find((s) => s.key === "withdrawals_disabled");
+      setWithdrawalsDisabled(wdSetting?.value === true || wdSetting?.value === "true");
+    } catch {}
+  }, []);
+
+  /**
+   * force = manual Refresh: everything, bypassing the server cache.
+   * Otherwise: fast tier always; slow tier only when it's due.
+   */
+  const fetchStats = useCallback(async ({ force = false } = {}) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setRefreshing(true);
+    const started = Date.now();
+    const includeSlow = force || !lastSlow.current || started - lastSlow.current >= SLOW_MS;
+    const fresh = force ? "?fresh=1" : "";
 
     try {
       const [dashboardRes, systemRes, queueRes, regRes] = await Promise.all([
-        api.get("/admin/dashboard"),
+        api.get(`/admin/dashboard${fresh}`),
         api.get("/withdrawals/admin/system-totals"),
-        api.get("/vpt/admin/stats"),
-        api.get("/admin/dashboard/registrations?period=daily&days=30"),
+        includeSlow ? api.get("/vpt/admin/stats") : Promise.resolve(null),
+        includeSlow ? api.get(`/admin/dashboard/registrations?period=daily&days=30${force ? "&fresh=1" : ""}`) : Promise.resolve(null),
       ]);
       const dashboard = dashboardRes.dashboard ?? {};
       const systemTotals = systemRes ?? {};
-      const queueStats = queueRes.stats ?? {};
-      setRegStats(regRes ?? null);
+      if (regRes) setRegStats(regRes);
+      if (!lastFast.current || force) await loadSettings();
 
-      try {
-        const settingsRes = await api.get("/admin/settings");
-        const wdSetting = (settingsRes.settings || []).find((s) => s.key === "withdrawals_disabled");
-        setWithdrawalsDisabled(wdSetting?.value === true || wdSetting?.value === "true");
-      } catch {}
-
-      setData({
+      setData((prev) => ({
         dashboard,
         systemTotals,
-        queueStats,
+        queueStats: queueRes ? queueRes.stats ?? {} : prev?.queueStats ?? {},
         pools: {
           operations_ngn: systemTotals.pools?.operations?.balance_ngn ?? 0,
           community_ngn: systemTotals.pools?.community?.balance_ngn ?? 0,
           operations_vpt: systemTotals.pools?.operations?.balance_vpt ?? 0,
           community_vpt: systemTotals.pools?.community?.balance_vpt ?? 0,
         },
-      });
+      }));
+      lastFast.current = Date.now();
+      if (includeSlow) lastSlow.current = Date.now();
+      failures.current = 0;
       setError(null);
       setLastUpdated(new Date());
     } catch (err) {
+      failures.current += 1;
+      lastFast.current = Date.now(); // back off from now
       setError(err.message || "Failed to load stats");
     } finally {
+      inFlight.current = false;
       setRefreshing(false);
     }
-  }, []);
+  }, [loadSettings]);
 
+  // Initial load + Live preference (per browser).
   useEffect(() => {
+    setLive(readLivePref());
     fetchStats();
-
-    function refreshWhenVisible() {
-      if (document.visibilityState === "visible") {
-        fetchStats();
-      }
-    }
-
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-
-    return () => {
-      window.removeEventListener("focus", refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
   }, [fetchStats]);
+
+  // One lightweight timer: refresh when due, only while Live and the tab is visible.
+  // After failures the interval backs off (1, 2, 4… minutes, max 5).
+  useEffect(() => {
+    function dueIn() {
+      const interval = Math.min(FAST_MS * 2 ** failures.current, MAX_BACKOFF_MS);
+      return lastFast.current + interval - Date.now();
+    }
+    function tick() {
+      setNow(Date.now());
+      if (!live || document.visibilityState !== "visible") return;
+      if (dueIn() <= 0) fetchStats();
+    }
+    const timer = setInterval(tick, 15 * 1000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [live, fetchStats]);
+
+  function toggleLive() {
+    const next = !live;
+    setLive(next);
+    try {
+      window.localStorage.setItem(LIVE_KEY, next ? "on" : "off");
+    } catch {}
+    if (next && Date.now() - lastFast.current >= FAST_MS) fetchStats();
+  }
 
   if (error && !data) {
     return (
@@ -82,7 +147,7 @@ export default function DashboardPage() {
           <p className="mb-2 text-lg text-red-200">Failed to load dashboard</p>
           <p className="mb-4 text-sm text-white/48">{error}</p>
           <button
-            onClick={fetchStats}
+            onClick={() => fetchStats({ force: true })}
             className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-4 py-2 font-semibold text-[var(--av-dark-blue)]"
           >
             Retry
@@ -118,24 +183,29 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={fetchStats}
+            onClick={() => fetchStats({ force: true })}
             disabled={refreshing}
             className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[var(--av-light-orange)] hover:text-[var(--av-light-orange)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {refreshing ? "Refreshing..." : "Refresh"}
           </button>
           {error && (
-            <span className="text-sm text-amber-200">Auto-refresh paused — last update failed</span>
+            <span className="text-sm text-amber-200">Last update failed. Retrying less often.</span>
           )}
           {lastUpdated && (
-            <span className="text-xs text-white/42">
-              Updated {lastUpdated.toLocaleTimeString()}
+            <span className="text-xs text-white/42" title={lastUpdated.toLocaleString()}>
+              Updated {ago(lastUpdated, now)}
             </span>
           )}
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-200">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            Live
-          </span>
+          <button
+            type="button"
+            onClick={toggleLive}
+            title={live ? "Auto-refreshes every minute while this tab is open. Click to pause." : "Auto-refresh paused. Click to resume."}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${live ? "border-emerald-400/30 text-emerald-200" : "border-white/10 text-white/50"}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${live ? "animate-pulse bg-emerald-400" : "bg-white/30"}`} />
+            {live ? "Live" : "Paused"}
+          </button>
         </div>
       </div>
 
@@ -209,7 +279,7 @@ export default function DashboardPage() {
               setWithdrawalsError(null);
               try {
                 await api.post("/admin/settings/withdrawals-toggle", { enabled: !withdrawalsDisabled });
-                await fetchStats();
+                await loadSettings();
               } catch (err) {
                 setWithdrawalsError(err.message || "Failed to change withdrawal status. Current state unchanged.");
               }
