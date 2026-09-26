@@ -54,7 +54,7 @@ export default function OdsSettingsPage() {
 
           <Card title="Webhook">
             <p className="text-sm text-white/70">
-              In the Paystack dashboard, set the webhook URL to <code className="rounded bg-black/30 px-1.5 py-0.5 text-xs">{"<ods-api URL>"}/v1/webhooks/paystack</code>. Paystack signs it with the active secret key, so nothing else needs configuring.
+              In the Paystack dashboard, set the webhook URL to <code className="select-all break-all rounded bg-black/30 px-1.5 py-0.5 text-xs">https://ods-api-134538542038.us-central1.run.app/v1/webhooks/paystack</code>. Paystack signs it with the active secret key, so nothing else needs configuring.
             </p>
           </Card>
         </>
