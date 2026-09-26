@@ -31,12 +31,13 @@ export default function WalletCard({ wallet, user, onUpdate }) {
       title: `Fund ${currencyLabel}${parsed.toLocaleString("en-NG")}`,
       message: `Credit ${currencyLabel}${parsed.toLocaleString("en-NG")} to ${user.email}'s ${currency.toUpperCase()} balance? This action will be written to the ledger.`,
       busy: false,
-      action: async () => {
+      action: async (reason) => {
         setConfirm((current) => (current ? { ...current, busy: true, error: null } : current));
         try {
           await api.post("/withdrawals/fund", {
             uid: user.id ?? user.uid,
             idempotency_key: idempotencyKey,
+            reason,
             ...(currency === "ngn"
               ? { amount_ngn: parsed }
               : { amount_vpt_units: parsed }),
@@ -136,9 +137,11 @@ export default function WalletCard({ wallet, user, onUpdate }) {
         message={confirm?.message ?? ""}
         busy={confirm?.busy}
         error={confirm?.error}
+        requireReason
+        reasonPlaceholder="Why is this wallet being credited? (saved to the ledger and audit log)"
         onCancel={() => (confirm?.busy ? null : setConfirm(null))}
-        onConfirm={() => {
-          if (confirm?.action && !confirm.busy) confirm.action();
+        onConfirm={(reason) => {
+          if (confirm?.action && !confirm.busy) confirm.action(reason);
         }}
       />
     </>

@@ -705,10 +705,11 @@ export default function ChannelsPage() {
       message: `Ban "${channel.name}"? The channel will be hidden and the creator will be restricted from this channel.`,
       destructive: true,
       confirmLabel: "Ban Channel",
-      action: async () => {
+      requireReason: true,
+      action: async (reason) => {
         setActionLoading(true);
         try {
-          await api.post(`/admin/channels/${channel.id}/ban`, {});
+          await api.post(`/admin/channels/${channel.id}/ban`, { reason });
           await loadChannels();
         } finally {
           setActionLoading(false);
@@ -1082,8 +1083,9 @@ export default function ChannelsPage() {
         confirmLabel={confirm?.confirmLabel || "Confirm"}
         busy={actionLoading}
         onCancel={() => setConfirm(null)}
-        onConfirm={async () => {
-          if (confirm?.action) await confirm.action();
+        requireReason={Boolean(confirm?.requireReason)}
+        onConfirm={async (reason) => {
+          if (confirm?.action) await confirm.action(reason);
           setConfirm(null);
         }}
       />

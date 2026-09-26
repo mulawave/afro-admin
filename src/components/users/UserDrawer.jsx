@@ -32,8 +32,6 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
   const [navLoading, setNavLoading] = useState(false);
   const [debitAmount, setDebitAmount] = useState("");
   const [debitCurrency, setDebitCurrency] = useState("ngn");
-  const [debitReason, setDebitReason] = useState("");
-  const [banReason, setBanReason] = useState("");
 
   const userId = user?.id ?? user?.uid;
 
@@ -118,23 +116,53 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
     });
   }
 
+  /** Restrictive action: confirm dialog with a required reason (audited server-side). */
+  function reasonedAction({ title, message, confirmLabel, destructive = true, call, success }) {
+    setConfirm({
+      title,
+      message,
+      destructive,
+      busy: false,
+      error: null,
+      confirmLabel,
+      requireReason: true,
+      action: async (reason) => {
+        setConfirm((current) => ({ ...current, busy: true, error: null }));
+        setActionLoading(true);
+        try {
+          await call(reason);
+          setFeedback({ tone: "success", message: success });
+          await loadDetail();
+          if (onUpdated) await onUpdated();
+          return true;
+        } catch (err) {
+          setConfirm((current) => ({ ...current, busy: false, error: err.message || "Action failed" }));
+          return false;
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  }
+
   function debitUserAssets() {
     const amt = parseFloat(debitAmount);
     if (!amt || amt <= 0) { setFeedback({ tone: "error", message: "Enter a valid amount" }); return; }
     setConfirm({
       title: "Debit User Assets",
-      message: `Debit ${debitCurrency.toUpperCase()} ${amt.toLocaleString()} from ${user?.email}'s balance?${debitReason ? ` Reason: ${debitReason}` : ""} This moves money and cannot be undone from here.`,
+      message: `Debit ${debitCurrency.toUpperCase()} ${amt.toLocaleString()} from ${user?.email}'s balance? This moves money and cannot be undone from here.`,
       destructive: true,
       busy: false,
       error: null,
       confirmLabel: "Debit",
-      action: async () => {
+      requireReason: true,
+      action: async (reason) => {
         setConfirm((current) => ({ ...current, busy: true, error: null }));
         setActionLoading(true);
         try {
-          await api.post(`/admin/users/${userId}/debit`, { amount: amt, currency: debitCurrency, reason: debitReason || undefined });
+          await api.post(`/admin/users/${userId}/debit`, { amount: amt, currency: debitCurrency, reason });
           setFeedback({ tone: "success", message: `Debited ${debitCurrency.toUpperCase()} ${amt.toLocaleString()} successfully.` });
-          setDebitAmount(""); setDebitReason("");
+          setDebitAmount("");
           await loadDetail(); await loadWallet();
           if (onUpdated) await onUpdated();
           return true;
@@ -156,11 +184,12 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
       busy: false,
       error: null,
       confirmLabel: "Delete User",
-      action: async () => {
+      requireReason: true,
+      action: async (reason) => {
         setConfirm((current) => ({ ...current, busy: true, error: null }));
         setActionLoading(true);
         try {
-          const res = await api.delete(`/admin/users/${userId}`);
+          const res = await api.delete(`/admin/users/${userId}`, { reason });
           if (onUpdated) await onUpdated();
           if (onDeleted) onDeleted(res.message || `Deleted ${user?.email}.`);
           if (onClose) onClose();
@@ -287,15 +316,6 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
 
                 {/* Ban / Unban */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex-1 min-w-[200px]">
-                    <input
-                      type="text"
-                      placeholder="Ban reason (optional)"
-                      value={banReason}
-                      onChange={(e) => setBanReason(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
-                    />
-                  </div>
                   {((detail || user)?.is_banned) ? (
                     <button
                       onClick={async () => {
@@ -303,7 +323,6 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                         try {
                           await api.post(`/admin/users/${userId}/unban`, {});
                           setFeedback({ tone: "success", message: "User unbanned." });
-                          setBanReason("");
                           await loadDetail();
                           if (onUpdated) await onUpdated();
                         } catch (err) {
@@ -315,18 +334,13 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                     >Unban User</button>
                   ) : (
                     <button
-                      onClick={async () => {
-                        setActionLoading(true);
-                        try {
-                          await api.post(`/admin/users/${userId}/ban`, { reason: banReason || undefined });
-                          setFeedback({ tone: "success", message: "User banned." });
-                          setBanReason("");
-                          await loadDetail();
-                          if (onUpdated) await onUpdated();
-                        } catch (err) {
-                          setFeedback({ tone: "error", message: err.message || "Failed to ban" });
-                        } finally { setActionLoading(false); }
-                      }}
+                      onClick={() => reasonedAction({
+                        title: "Ban User",
+                        message: `Ban ${user?.email}? They'll be blocked from the platform until unbanned.`,
+                        confirmLabel: "Ban User",
+                        call: (reason) => api.post(`/admin/users/${userId}/ban`, { reason }),
+                        success: "User banned.",
+                      })}
                       disabled={actionLoading}
                       className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
                     >Ban User</button>
@@ -352,16 +366,13 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                     >Unfreeze Wallet</button>
                   ) : (
                     <button
-                      onClick={async () => {
-                        setActionLoading(true);
-                        try {
-                          await api.post(`/admin/users/${userId}/freeze-wallet`, {});
-                          setFeedback({ tone: "success", message: "Wallet frozen." });
-                          await loadDetail();
-                          if (onUpdated) await onUpdated();
-                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
-                        finally { setActionLoading(false); }
-                      }}
+                      onClick={() => reasonedAction({
+                        title: "Freeze Wallet",
+                        message: `Freeze ${user?.email}'s wallet? No money can move in or out until it's unfrozen.`,
+                        confirmLabel: "Freeze Wallet",
+                        call: (reason) => api.post(`/admin/users/${userId}/freeze-wallet`, { reason }),
+                        success: "Wallet frozen.",
+                      })}
                       disabled={actionLoading}
                       className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-200 hover:bg-sky-500/20 disabled:opacity-50"
                     >Freeze Wallet</button>
@@ -383,16 +394,13 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                     >Unban Withdrawals</button>
                   ) : (
                     <button
-                      onClick={async () => {
-                        setActionLoading(true);
-                        try {
-                          await api.post(`/admin/users/${userId}/ban-withdrawal`, {});
-                          setFeedback({ tone: "success", message: "Withdrawals banned." });
-                          await loadDetail();
-                          if (onUpdated) await onUpdated();
-                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
-                        finally { setActionLoading(false); }
-                      }}
+                      onClick={() => reasonedAction({
+                        title: "Ban Withdrawals",
+                        message: `Stop ${user?.email} from withdrawing funds until re-enabled?`,
+                        confirmLabel: "Ban Withdrawals",
+                        call: (reason) => api.post(`/admin/users/${userId}/ban-withdrawal`, { reason }),
+                        success: "Withdrawals banned.",
+                      })}
                       disabled={actionLoading}
                       className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
                     >Ban Withdrawals</button>
@@ -414,16 +422,13 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                     >Unban Channel Creation</button>
                   ) : (
                     <button
-                      onClick={async () => {
-                        setActionLoading(true);
-                        try {
-                          await api.post(`/admin/users/${userId}/ban-channel-creation`, { reason: banReason || undefined });
-                          setFeedback({ tone: "success", message: "Channel creation banned." });
-                          await loadDetail();
-                          if (onUpdated) await onUpdated();
-                        } catch (err) { setFeedback({ tone: "error", message: err.message }); }
-                        finally { setActionLoading(false); }
-                      }}
+                      onClick={() => reasonedAction({
+                        title: "Ban Channel Creation",
+                        message: `Stop ${user?.email} from creating channels until re-enabled?`,
+                        confirmLabel: "Ban Channel Creation",
+                        call: (reason) => api.post(`/admin/users/${userId}/ban-channel-creation`, { reason }),
+                        success: "Channel creation banned.",
+                      })}
                       disabled={actionLoading}
                       className="rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-500/20 disabled:opacity-50"
                     >Ban Channel Creation</button>
@@ -457,16 +462,6 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
                         <option value="vpt" className="bg-[var(--admin-surface)]">VPT</option>
                         <option value="coins" className="bg-[var(--admin-surface)]">Coins</option>
                       </select>
-                    </div>
-                    <div className="flex-1 min-w-[150px]">
-                      <label className="block text-[11px] text-white/42 mb-1">Reason</label>
-                      <input
-                        type="text"
-                        placeholder="Reason for debit"
-                        value={debitReason}
-                        onChange={(e) => setDebitReason(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/32"
-                      />
                     </div>
                     <button
                       onClick={debitUserAssets}
@@ -522,13 +517,14 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
         busy={confirm?.busy}
         error={confirm?.error}
         confirmLabel={confirm?.confirmLabel}
+        requireReason={Boolean(confirm?.requireReason)}
         onCancel={() => setConfirm(null)}
-        onConfirm={async () => {
+        onConfirm={async (reason) => {
           if (!confirm?.action) {
             setConfirm(null);
             return;
           }
-          const shouldClose = await confirm.action();
+          const shouldClose = await confirm.action(reason);
           if (shouldClose !== false) {
             setConfirm(null);
           }

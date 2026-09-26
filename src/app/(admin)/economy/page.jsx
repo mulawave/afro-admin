@@ -158,41 +158,56 @@ export default function EconomyPage() {
   );
 }
 
+/**
+ * Split rules as the backend defines them (settings.model.js):
+ *   COMMUNITY_POOL_PERCENT  — % of each subscription price to the community pool
+ *   VPT_EXTRACTION_PERCENT  — % OF THE COMMUNITY POOL extracted for vPT conversion
+ * Both must be 0–100 (enforced by the backend too).
+ * NOTE: as of 2026-09-26 no payment code reads these two settings; live
+ * splits are fixed in backend code. The banner says so, to avoid false confidence.
+ */
 function SplitSection({ data, saving, onUpdate }) {
   const community = Number(data?.COMMUNITY_POOL_PERCENT ?? 20);
   const extraction = Number(data?.VPT_EXTRACTION_PERCENT ?? 30);
-  const operations = Math.max(0, 100 - community - extraction);
-  const total = community + operations + extraction;
-  const isValid = total === 100;
+  const valid = [community, extraction].every((n) => Number.isFinite(n) && n >= 0 && n <= 100);
+  const vptShare = (community * extraction) / 100; // % of each subscription price
+  const communityCash = community - vptShare;
+  const rest = 100 - community;
+  const fmt = (n) => (Number.isInteger(n) ? n : n.toFixed(2));
 
   return (
     <Section title="Split Rules">
+      <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
+        These two percentages are saved but <strong>not yet applied</strong> by the payment code. Live revenue splits are
+        currently fixed in the backend (for example, interactions: creator 50% / operations 30% / community 20%). Changing
+        them here doesn&apos;t move any money until the backend is wired to use them.
+      </div>
       <div className="space-y-3">
         <EditableField
-          label="Community Pool %"
+          label="Community Pool % (of price)"
           value={community}
           saving={saving === "COMMUNITY_POOL_PERCENT"}
           onSave={(v) => onUpdate("COMMUNITY_POOL_PERCENT", +v, "Community Pool %")}
           type="number"
+          percent
         />
         <EditableField
-          label="Operations % (derived)"
-          value={operations}
-          saving={false}
-          readOnly
-          type="number"
-        />
-        <EditableField
-          label="vPT Extraction %"
+          label="vPT Extraction % (of community pool)"
           value={extraction}
           saving={saving === "VPT_EXTRACTION_PERCENT"}
           onSave={(v) => onUpdate("VPT_EXTRACTION_PERCENT", +v, "vPT Extraction %")}
           type="number"
+          percent
         />
-        <div className={`mt-2 rounded-2xl px-3 py-2 text-sm font-medium ${
-          isValid ? "bg-emerald-500/10 text-emerald-200" : "bg-red-500/10 text-red-200"
-        }`}>
-          Community ({community}%) + Operations ({operations}%) + vPT Extraction ({extraction}%) = {total}% {isValid ? "✓" : "⚠ review settings"}
+        <div className={`mt-2 rounded-2xl px-3 py-2 text-sm ${valid ? "bg-white/[0.04] text-white/75" : "bg-red-500/10 text-red-200"}`}>
+          {valid ? (
+            <>
+              Of each ₦100 of subscription: <strong className="text-white">₦{fmt(communityCash)}</strong> community pool (cash),{" "}
+              <strong className="text-white">₦{fmt(vptShare)}</strong> converted to vPT, <strong className="text-white">₦{fmt(rest)}</strong> everything else.
+            </>
+          ) : (
+            "Each percentage must be between 0 and 100."
+          )}
         </div>
       </div>
     </Section>
@@ -208,9 +223,10 @@ function Section({ title, children }) {
   );
 }
 
-function EditableField({ label, value, onSave, saving, type = "text", readOnly = false }) {
+function EditableField({ label, value, onSave, saving, type = "text", readOnly = false, percent = false }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(value ?? ""));
+  const [fieldError, setFieldError] = useState(null);
 
   function handleSave() {
     if (readOnly) return;
@@ -218,12 +234,21 @@ function EditableField({ label, value, onSave, saving, type = "text", readOnly =
       setEditing(false);
       return;
     }
+    if (percent) {
+      const n = Number(val);
+      if (val.trim() === "" || !Number.isFinite(n) || n < 0 || n > 100) {
+        setFieldError("Enter a number from 0 to 100.");
+        return;
+      }
+    }
+    setFieldError(null);
     onSave(val);
     setEditing(false);
   }
 
   function handleCancel() {
     setVal(String(value ?? ""));
+    setFieldError(null);
     setEditing(false);
   }
 
@@ -235,10 +260,13 @@ function EditableField({ label, value, onSave, saving, type = "text", readOnly =
           <input
             type={type}
             value={val}
-            onChange={(e) => setVal(e.target.value)}
-            className="w-40 rounded-2xl border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-white outline-none"
+            onChange={(e) => { setVal(e.target.value); setFieldError(null); }}
+            {...(percent ? { min: 0, max: 100, step: "any" } : {})}
+            className={`w-40 rounded-2xl border bg-white/6 px-3 py-1.5 text-sm text-white outline-none ${fieldError ? "border-red-400/60" : "border-white/10"}`}
             autoFocus
+            title={fieldError || undefined}
           />
+          {fieldError ? <span className="text-xs text-red-200">{fieldError}</span> : null}
           <button
             onClick={handleSave}
             className="rounded-2xl bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] px-3 py-1.5 text-xs font-semibold text-[var(--av-dark-blue)] transition hover:brightness-105"

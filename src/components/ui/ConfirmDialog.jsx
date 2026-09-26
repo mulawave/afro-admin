@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 // If onConfirm throws, the dialog stays open and shows the error, so a failed
 // sensitive action is never silently dismissed. Callers let errors propagate
 // out of onConfirm instead of catching them.
+// With requireReason, a reason field is shown, Confirm stays disabled until
+// one is entered, and the reason is passed to onConfirm(reason). The backend
+// enforces the same rule for money and restrictive actions.
 export default function ConfirmDialog({
   open,
   title,
@@ -16,14 +19,18 @@ export default function ConfirmDialog({
   error = null,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
+  requireReason = false,
+  reasonPlaceholder = "Reason (saved to the audit log)",
 }) {
   const [running, setRunning] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     if (!open) {
       setRunning(false);
       setActionError(null);
+      setReason("");
     }
   }, [open]);
 
@@ -31,12 +38,13 @@ export default function ConfirmDialog({
 
   const isBusy = busy || running;
   const shownError = actionError || error;
+  const reasonOk = !requireReason || reason.trim().length >= 3;
 
   async function handleConfirm() {
     setActionError(null);
     setRunning(true);
     try {
-      await onConfirm?.();
+      await onConfirm?.(reason.trim());
     } catch (err) {
       setActionError(err?.message || "Action failed. Please retry.");
     } finally {
@@ -50,7 +58,19 @@ export default function ConfirmDialog({
 
       <div className="relative mx-4 w-full max-w-sm rounded-[1.75rem] border border-white/10 bg-[var(--admin-surface-strong)] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
         <h3 className="mb-2 text-lg font-semibold text-white">{title}</h3>
-        <p className="mb-6 text-sm leading-6 text-white/66">{message}</p>
+        <p className={`${requireReason ? "mb-4" : "mb-6"} text-sm leading-6 text-white/66`}>{message}</p>
+
+        {requireReason ? (
+          <textarea
+            autoFocus
+            rows={2}
+            maxLength={300}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={reasonPlaceholder}
+            className="mb-4 w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--av-light-orange)]/50"
+          />
+        ) : null}
 
         {shownError ? <p role="alert" className="mb-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{shownError}</p> : null}
 
@@ -64,8 +84,8 @@ export default function ConfirmDialog({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={isBusy}
-            className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium text-white transition-colors ${
+            disabled={isBusy || !reasonOk}
+            className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               destructive
                 ? "bg-red-600 hover:bg-red-500"
                 : "bg-[linear-gradient(135deg,var(--av-orange),var(--av-light-orange))] text-[var(--av-dark-blue)] hover:brightness-105"

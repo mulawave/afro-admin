@@ -264,14 +264,28 @@ export default function UsersPage() {
             </button>
           ) : (
             <button
-              onClick={async () => {
-                try {
-                  await api.post(`/admin/users/${row.uid}/ban`, {});
-                  setFeedback({ tone: "success", message: `Banned ${row.email || row.name}` });
-                  await loadUsers();
-                } catch (err) {
-                  setFeedback({ tone: "error", message: err.message || "Failed to ban" });
-                }
+              onClick={() => {
+                setConfirm({
+                  title: "Ban User",
+                  message: `Ban ${row.email || row.name}? They'll be blocked from the platform until unbanned.`,
+                  destructive: true,
+                  busy: false,
+                  error: null,
+                  confirmLabel: "Ban User",
+                  requireReason: true,
+                  action: async (reason) => {
+                    setConfirm((c) => ({ ...c, busy: true, error: null }));
+                    try {
+                      await api.post(`/admin/users/${row.uid}/ban`, { reason });
+                      setFeedback({ tone: "success", message: `Banned ${row.email || row.name}` });
+                      await loadUsers();
+                      return true;
+                    } catch (err) {
+                      setConfirm((c) => ({ ...c, busy: false, error: err.message || "Failed to ban" }));
+                      return false;
+                    }
+                  },
+                });
               }}
               className="text-xs font-medium text-amber-300 hover:text-amber-200"
             >
@@ -287,10 +301,11 @@ export default function UsersPage() {
                 busy: false,
                 error: null,
                 confirmLabel: "Delete User",
-                action: async () => {
+                requireReason: true,
+                action: async (reason) => {
                   setConfirm((c) => ({ ...c, busy: true, error: null }));
                   try {
-                    await api.delete(`/admin/users/${row.uid}`);
+                    await api.delete(`/admin/users/${row.uid}`, { reason });
                     setFeedback({ tone: "success", message: `Deleted ${row.email || row.name}` });
                     await loadUsers();
                     return true;
@@ -394,14 +409,15 @@ export default function UsersPage() {
                     busy: false,
                     error: null,
                     confirmLabel: "Ban Selected",
-                    action: async () => {
+                    requireReason: true,
+                    action: async (reason) => {
                       setConfirm((c) => ({ ...c, busy: true, error: null }));
                       setBulkLoading(true);
                       try {
                         let ok = 0, fail = 0;
                         for (const uid of selectedIds) {
                           try {
-                            await api.post(`/admin/users/${uid}/ban`, {});
+                            await api.post(`/admin/users/${uid}/ban`, { reason });
                             ok++;
                           } catch { fail++; }
                         }
@@ -430,14 +446,15 @@ export default function UsersPage() {
                     busy: false,
                     error: null,
                     confirmLabel: "Delete Selected",
-                    action: async () => {
+                    requireReason: true,
+                    action: async (reason) => {
                       setConfirm((c) => ({ ...c, busy: true, error: null }));
                       setBulkLoading(true);
                       try {
                         let ok = 0, fail = 0;
                         for (const uid of selectedIds) {
                           try {
-                            await api.delete(`/admin/users/${uid}`);
+                            await api.delete(`/admin/users/${uid}`, { reason });
                             ok++;
                           } catch { fail++; }
                         }
@@ -497,10 +514,11 @@ export default function UsersPage() {
         error={confirm?.error}
         destructive={confirm?.destructive}
         confirmLabel={confirm?.confirmLabel}
+        requireReason={Boolean(confirm?.requireReason)}
         onCancel={() => setConfirm(null)}
-        onConfirm={async () => {
+        onConfirm={async (reason) => {
           if (!confirm?.action) { setConfirm(null); return; }
-          const shouldClose = await confirm.action();
+          const shouldClose = await confirm.action(reason);
           if (shouldClose !== false) setConfirm(null);
         }}
       />
