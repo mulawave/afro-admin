@@ -46,6 +46,7 @@ const links = [
   { name: "Audit", path: "/audit", tone: "Infrastructure" },
   // Obroh Download Suite: same admin login, ODS- prefixed pages.
   { name: "ODS-Dashboard", path: "/ods-dashboard", tone: "ODS" },
+  { name: "ODS-Support", path: "/ods-support", tone: "ODS", badgeKey: "odsSupport" },
   { name: "ODS-Users", path: "/ods-users", tone: "ODS" },
   { name: "ODS-Payments", path: "/ods-payments", tone: "ODS" },
   { name: "ODS-Vouchers", path: "/ods-vouchers", tone: "ODS" },
@@ -59,6 +60,7 @@ const links = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [kycPending, setKycPending] = useState(null);
+  const [odsUnread, setOdsUnread] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +78,27 @@ export default function Sidebar() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
+  // Unread ODS support tickets: two cheap count queries, every 5 min, only while visible.
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchOdsSupport() {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      try {
+        const { ods } = await import("@/services/ods");
+        const r = await ods.supportSummary();
+        if (!cancelled) setOdsUnread(r?.unread > 0 ? r.unread : null);
+      } catch {
+        if (!cancelled) setOdsUnread(null);
+      }
+    }
+    fetchOdsSupport();
+    const interval = setInterval(fetchOdsSupport, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   const badgeFor = (link) => {
     if (link.badgeKey === "kyc" && kycPending) return kycPending;
+    if (link.badgeKey === "odsSupport" && odsUnread) return odsUnread;
     return null;
   };
 

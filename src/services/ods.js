@@ -63,6 +63,15 @@ export const ods = {
   setMaster: (uid, enabled, reason) => request(`users/${encodeURIComponent(uid)}/master`, { method: "POST", body: { enabled, reason } }),
   deleteUser: (uid, reason) => request(`users/${encodeURIComponent(uid)}/delete`, { method: "POST", body: { reason } }),
   legacy: (installId) => request(`legacy/${encodeURIComponent(installId)}`),
+  notifyUser: (uid, title, body) => request(`users/${encodeURIComponent(uid)}/notify`, { method: "POST", body: { title, body } }),
+  transferUser: (uid, toUid, reason) => request(`users/${encodeURIComponent(uid)}/transfer`, { method: "POST", body: { toUid, reason } }),
+
+  // Support
+  supportTickets: (query) => request("support/tickets", { query }),
+  supportTicket: (id) => request(`support/tickets/${encodeURIComponent(id)}`),
+  supportReply: (id, message, close = false) => request(`support/tickets/${encodeURIComponent(id)}/reply`, { method: "POST", body: { message, close } }),
+  supportStatus: (id, status, reason) => request(`support/tickets/${encodeURIComponent(id)}/status`, { method: "POST", body: { status, reason } }),
+  supportSummary: () => request("support/summary"),
 
   // Payments
   payments: (query) => request("payments", { query }),

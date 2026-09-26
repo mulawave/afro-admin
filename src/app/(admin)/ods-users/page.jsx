@@ -50,7 +50,26 @@ export default function OdsUsersPage() {
   }, []);
 
   useEffect(() => {
-    loadRecent();
+    // Deep link from ODS-Support: /ods-users?q=<Account ID>
+    const initial = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("q") : null;
+    if (!initial) {
+      loadRecent();
+      return;
+    }
+    setQuery(initial);
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await ods.searchUsers(initial);
+        setItems(r.items);
+        setNextBefore(null);
+        if (r.items.length === 1) setSelected(r.items[0].uid);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [loadRecent]);
 
   async function search(e) {
@@ -172,12 +191,27 @@ function UserDrawer({ uid, onClose, onChanged }) {
       {!detail && !error ? <Spinner /> : null}
       {u ? (
         <div className="space-y-5">
-          <div>
+          {u.transferredTo ? (
+            <p className="rounded-2xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
+              This account was transferred to <span className="font-mono">{u.transferredTo}</span>. Open that account to manage the user.
+            </p>
+          ) : null}
+          <div className="flex items-center gap-4">
+            {u.profile.photoUrl ? (
+              // Signed URL, fetched fresh each time the page opens (it expires).
+              <img src={u.profile.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-full border border-white/10 object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/8 text-lg font-semibold text-white/60">
+                {(u.profile.fullName || u.email || "?").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+          <div className="min-w-0">
             <p className="text-lg font-semibold text-white">{u.profile.fullName || u.email || "Unnamed user"}</p>
             <p className="font-mono text-xs text-white/45">{u.uid}</p>
             <div className="mt-2">
               <PlanBadge u={u} />
             </div>
+          </div>
           </div>
 
           {notice ? <p className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p> : null}
@@ -194,7 +228,11 @@ function UserDrawer({ uid, onClose, onChanged }) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Stat label="vPT balance" value={formatVpt(u.vptBalance)} tone={u.vptBalance < 0 ? "bad" : "default"} />
-                <Stat label="Streak" value={`Day ${u.streak.day}`} hint={u.streak.lastClaimDate ? `Last claim ${u.streak.lastClaimDate}` : "No active run"} />
+                <Stat
+                  label="Streak"
+                  value={`Day ${u.streak.day}`}
+                  hint={u.streak.lastClaimAt ? `Last claim ${formatDate(u.streak.lastClaimAt)}` : u.streak.lastClaimDate ? `Last claim ${u.streak.lastClaimDate}` : "No active run"}
+                />
                 <Stat label="Pro until" value={u.subscription.endsAt ? new Date(u.subscription.endsAt).toLocaleDateString("en-NG") : u.proActive ? "Lifetime" : "—"} hint={u.subscription.source ? `Source: ${u.subscription.source}` : null} />
                 <Stat label="Trial" value={u.subscription.trialUsed ? "Used" : "Available"} />
               </div>
@@ -202,6 +240,8 @@ function UserDrawer({ uid, onClose, onChanged }) {
                 <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                   {[
                     ["Email", u.profile.email],
+                    ["Gender", u.profile.gender],
+                    ["Bio", u.profile.bio],
                     ["Phone", u.profile.phone],
                     ["Referral code", u.referralCode],
                     ["Referred by", u.referredByUid],
@@ -226,6 +266,8 @@ function UserDrawer({ uid, onClose, onChanged }) {
                     <Button variant="ghost" onClick={() => setDialog("end")} disabled={!u.proActive}>End Pro</Button>
                     <Button variant="ghost" onClick={() => setDialog("trial")} disabled={!u.subscription.trialUsed}>Reset trial</Button>
                     <Button variant="ghost" onClick={() => setDialog("master")}>{u.master ? "Clear master" : "Set master"}</Button>
+                    <Button variant="ghost" onClick={() => setDialog("message")}>Send message</Button>
+                    <Button variant="ghost" onClick={() => setDialog("transfer")}>Transfer account</Button>
                     <Button variant="danger" onClick={() => setDialog("delete")}>Delete account</Button>
                   </div>
                 </Card>
@@ -332,9 +374,15 @@ function UserActions({ dialog, setDialog, u, onDone }) {
   const [vpt, setVpt] = useState("");
   const [plan, setPlan] = useState("monthly");
   const [days, setDays] = useState("7");
+  const [msgTitle, setMsgTitle] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [toUid, setToUid] = useState("");
   useEffect(() => {
     setVpt("");
     setDays("7");
+    setMsgTitle("");
+    setMsgBody("");
+    setToUid("");
   }, [dialog]);
 
   const close = () => setDialog(null);
@@ -441,6 +489,51 @@ function UserActions({ dialog, setDialog, u, onDone }) {
           onConfirm={async (reason) => {
             const r = await ods.setMaster(u.uid, !u.master, reason);
             onDone(u.master ? "Master mode cleared." : "Master mode set.", r.user);
+          }}
+        />
+      );
+    case "message":
+      return (
+        <ReasonDialog
+          {...common}
+          requireReason={false}
+          title="Send a message"
+          message="Appears in the user's notification centre and as a push notification (if their device is registered)."
+          canConfirm={msgTitle.trim().length > 0 && msgBody.trim().length > 0}
+          fields={
+            <>
+              <Field label={`Title (${msgTitle.length}/80)`}>
+                <input value={msgTitle} maxLength={80} onChange={(e) => setMsgTitle(e.target.value)} className={inputClass} placeholder="About your account" />
+              </Field>
+              <Field label={`Message (${msgBody.length}/400)`}>
+                <textarea value={msgBody} maxLength={400} rows={4} onChange={(e) => setMsgBody(e.target.value)} className={inputClass} />
+              </Field>
+            </>
+          }
+          confirmLabel="Send"
+          onConfirm={async () => {
+            const r = await ods.notifyUser(u.uid, msgTitle.trim(), msgBody.trim());
+            onDone(r.delivered ? "Message sent." : "Saved to the user's inbox. No device is registered, so no push was sent.");
+          }}
+        />
+      );
+    case "transfer":
+      return (
+        <ReasonDialog
+          {...common}
+          destructive
+          title="Transfer this account"
+          message="Moves the balance, plan, master, streak, referral code and profile to another Account ID (e.g. after a reinstall), then closes this account. Ask the user for the Account ID shown on their Profile screen."
+          canConfirm={toUid.trim().length > 0 && toUid.trim() !== u.uid}
+          fields={
+            <Field label="Destination Account ID">
+              <input value={toUid} onChange={(e) => setToUid(e.target.value)} className={`${inputClass} font-mono`} placeholder="Account ID from the user's phone" />
+            </Field>
+          }
+          confirmLabel="Transfer"
+          onConfirm={async (reason) => {
+            const r = await ods.transferUser(u.uid, toUid.trim(), reason);
+            onDone(`Transferred to ${r.toUid}.${r.referralsMoved ? ` ${r.referralsMoved} referred user(s) moved too.` : ""}`, { uid: u.uid, deleted: true, proActive: false });
           }}
         />
       );

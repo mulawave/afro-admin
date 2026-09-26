@@ -44,7 +44,7 @@ export default function OdsDashboardPage() {
   const { data, loading, error, reload } = useAsync(() => {
     const fresh = freshRef.current;
     freshRef.current = false;
-    return ods.dashboard(days, fresh);
+    return Promise.all([ods.dashboard(days, fresh), ods.supportSummary().catch(() => null)]).then(([d, support]) => ({ ...d, support }));
   }, [days]);
 
   const d = data;
@@ -84,6 +84,12 @@ export default function OdsDashboardPage() {
           <p className="text-xs text-white/40">
             Generated {formatDate(d.generatedAt)} · figures may be up to 5 minutes old.
           </p>
+          {d.support ? (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <a href="/ods-support" className="block"><Stat label="Open support tickets" value={d.support.open} tone={d.support.open ? "warn" : "default"} hint="Open ODS-Support" /></a>
+              <a href="/ods-support" className="block"><Stat label="Unread tickets" value={d.support.unread} tone={d.support.unread ? "warn" : "default"} hint="Waiting for a reply" /></a>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Daily active" value={d.users.dau.toLocaleString()} hint={`${d.users.wau.toLocaleString()} weekly`} />
             <Stat label="Monthly active" value={d.users.mau.toLocaleString()} hint={`${d.users.total.toLocaleString()} accounts total`} />
