@@ -36,7 +36,7 @@ export default function ChannelSubscribersPage() {
         setError(null);
       }
       
-      const isExclusive = channel && Number(channel.exclusive_monthly_fee_ngn || 0) > 0;
+      const isExclusive = channel?.type === "exclusive";
       let res;
       if (isExclusive) {
         let path = `/channels/${channelId}/exclusive/subscribers?limit=50`;
@@ -329,7 +329,7 @@ export default function ChannelSubscribersPage() {
             {channel?.name || 'Channel'} Subscribers
           </h1>
           <p className="mt-2 text-sm text-white/58">
-            {channel && Number(channel.exclusive_monthly_fee_ngn || 0) > 0
+            {channel?.type === "exclusive"
               ? 'Manage exclusive channel subscribers'
               : 'Manage channel subscribers'}
           </p>
@@ -338,7 +338,7 @@ export default function ChannelSubscribersPage() {
           <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-sm text-white/62">
             {subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''}
           </span>
-          {channel && Number(channel.exclusive_monthly_fee_ngn || 0) > 0 && (
+          {channel?.type === "exclusive" && (
             <button
               onClick={() => setPriceDialog({ open: true, monthlyFee: channel?.exclusive_monthly_fee_ngn || 0 })}
               className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 hover:text-violet-200 hover:bg-violet-500/15 transition-all"
