@@ -55,12 +55,22 @@ const links = [
   { name: "ODS-Announcements", path: "/ods-announcements", tone: "ODS" },
   { name: "ODS-Public Pool", path: "/ods-pool", tone: "ODS" },
   { name: "ODS-Audit", path: "/ods-audit", tone: "ODS" },
+  // Obroh Media Suite: same admin login, OMS- prefixed pages.
+  { name: "OMS-Dashboard", path: "/oms-dashboard", tone: "OMS" },
+  { name: "OMS-Support", path: "/oms-support", tone: "OMS", badgeKey: "omsSupport" },
+  { name: "OMS-Users", path: "/oms-users", tone: "OMS" },
+  { name: "OMS-Vouchers", path: "/oms-vouchers", tone: "OMS" },
+  { name: "OMS-Payments", path: "/oms-payments", tone: "OMS" },
+  { name: "OMS-Operations", path: "/oms-operations", tone: "OMS" },
+  { name: "OMS-Announcements", path: "/oms-announcements", tone: "OMS" },
+  { name: "OMS-Audit", path: "/oms-audit", tone: "OMS" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [kycPending, setKycPending] = useState(null);
   const [odsUnread, setOdsUnread] = useState(null);
+  const [omsUnread, setOmsUnread] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,9 +106,28 @@ export default function Sidebar() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
+  // Unread OMS support tickets: same cadence as ODS — every 5 min, only while visible.
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchOmsSupport() {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      try {
+        const { oms } = await import("@/services/oms");
+        const r = await oms.supportSummary();
+        if (!cancelled) setOmsUnread(r?.unread > 0 ? r.unread : null);
+      } catch {
+        if (!cancelled) setOmsUnread(null);
+      }
+    }
+    fetchOmsSupport();
+    const interval = setInterval(fetchOmsSupport, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   const badgeFor = (link) => {
     if (link.badgeKey === "kyc" && kycPending) return kycPending;
     if (link.badgeKey === "odsSupport" && odsUnread) return odsUnread;
+    if (link.badgeKey === "omsSupport" && omsUnread) return omsUnread;
     return null;
   };
 
