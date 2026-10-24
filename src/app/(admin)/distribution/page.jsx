@@ -11,12 +11,14 @@ import SettingsTab from "./SettingsTab";
 import LedgerTab from "./LedgerTab";
 import MessagingTab from "./MessagingTab";
 import ChatTab from "./ChatTab";
+import HotelCodesTab from "./HotelCodesTab";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "distributors", label: "Distributors" },
   { id: "marketers", label: "Marketers" },
   { id: "devices", label: "Devices" },
+  { id: "hotels", label: "Hotels" },
   { id: "settings", label: "Settings" },
   { id: "messaging", label: "Messaging" },
   { id: "chat", label: "TV Chat" },
@@ -118,6 +120,10 @@ export default function DistributionPage() {
 
       {tab === "devices" && (
         <DevicesTab onFeedback={showFeedback} />
+      )}
+
+      {tab === "hotels" && (
+        <HotelCodesTab onFeedback={showFeedback} />
       )}
 
       {tab === "settings" && (
