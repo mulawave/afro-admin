@@ -31,7 +31,7 @@ export default function LibraryModerationPage() {
   const loadChannels = useCallback(async () => {
     const res = await api.get("/channels");
     const source = Array.isArray(res?.channels) ? res.channels : [];
-    const exclusiveChannels = source.filter((channel) => channel.type === "exclusive");
+    const exclusiveChannels = source.filter((channel) => channel.type === "exclusive" || channel.type === "public");
 
     setChannels(exclusiveChannels);
     if (exclusiveChannels.length > 0) {
@@ -136,7 +136,7 @@ export default function LibraryModerationPage() {
         <div>
           <h1 className="text-3xl font-semibold text-white">Library Moderation</h1>
           <p className="mt-2 text-sm text-white/60">
-            Review, publish, archive, and remove exclusive library content with full audit coverage.
+            Review, publish, archive, and remove channel library content with full audit coverage.
           </p>
         </div>
         <Link href="/audit" className="inline-flex rounded-2xl border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/80 hover:border-white/20 hover:text-white">
@@ -162,7 +162,7 @@ export default function LibraryModerationPage() {
         </div>
       ) : channels.length === 0 ? (
         <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] px-5 py-8 text-sm text-white/70">
-          No exclusive channels found.
+          No channels found.
         </div>
       ) : (
         <>
@@ -174,7 +174,7 @@ export default function LibraryModerationPage() {
               className="mt-2 w-full rounded-2xl border border-white/10 bg-white/6 px-3 py-3 text-sm text-white outline-none"
             >
               {channels.map((channel) => (
-                <option key={channel.id} value={channel.id}>{channel.name}</option>
+                <option key={channel.id} value={channel.id}>{channel.name} {channel.type === "exclusive" ? "(Exclusive)" : "(Public)"}</option>
               ))}
             </select>
             {selectedChannel ? (
