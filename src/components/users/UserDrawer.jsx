@@ -145,50 +145,37 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
     });
   }
 
-  function loginAsUser() {
+  async function loginAsUser() {
     const displayLabel = user?.email || user?.name || userId;
-    setConfirm({
-      title: "Login as User",
-      message: `Open AfroVision signed in as ${displayLabel}? This creates a 2-hour audited admin impersonation session in a new tab.`,
-      destructive: false,
-      busy: false,
-      error: null,
-      confirmLabel: "Login as User",
-      requireReason: true,
-      action: async (reason) => {
-        setConfirm((current) => ({ ...current, busy: true, error: null }));
-        setActionLoading(true);
-        try {
-          const res = await api.post(`/admin/users/${userId}/impersonate`, { reason });
-          const base = (process.env.NEXT_PUBLIC_WEBSITE_URL || res.website_url || "https://afrovision.online").replace(/\/$/, "");
-          const url = `${base}/impersonate#token=${encodeURIComponent(res.token)}`;
-          const opened = window.open(url, "_blank", "noopener,noreferrer");
-          if (!opened && navigator?.clipboard) {
-            await navigator.clipboard.writeText(url).catch(() => {});
-            setFeedback({
-              tone: "success",
-              message: `Popup blocked ? impersonation link for ${displayLabel} copied to clipboard.`,
-            });
-          } else {
-            setFeedback({
-              tone: "success",
-              message: `Opened AfroVision signed in as ${displayLabel} in a new tab (valid 2 hours).`,
-            });
-          }
-          return true;
-        } catch (err) {
-          setConfirm((current) => ({
-            ...current,
-            busy: false,
-            error: err.message || "Failed to start user session",
-          }));
-          return false;
-        } finally {
-          setActionLoading(false);
-        }
-      },
-    });
+    setActionLoading(true);
+    setFeedback(null);
+    try {
+      const res = await api.post(`/admin/users/${userId}/impersonate`, {});
+      const base = (process.env.NEXT_PUBLIC_WEBSITE_URL || res.website_url || "https://afrovision.online").replace(/\/$/, "");
+      const url = `${base}/impersonate#token=${encodeURIComponent(res.token)}`;
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened && navigator?.clipboard) {
+        await navigator.clipboard.writeText(url).catch(() => {});
+        setFeedback({
+          tone: "success",
+          message: `Popup blocked ? impersonation link for ${displayLabel} copied to clipboard.`,
+        });
+      } else {
+        setFeedback({
+          tone: "success",
+          message: `Opened AfroVision signed in as ${displayLabel} in a new tab.`,
+        });
+      }
+    } catch (err) {
+      setFeedback({
+        tone: "error",
+        message: err.message || "Failed to impersonate user",
+      });
+    } finally {
+      setActionLoading(false);
+    }
   }
+
   function debitUserAssets() {
     const amt = parseFloat(debitAmount);
     if (!amt || amt <= 0) { setFeedback({ tone: "error", message: "Enter a valid amount" }); return; }
@@ -520,15 +507,13 @@ export default function UserDrawer({ user, onClose, onUpdated, onDeleted }) {
             {/* Action buttons — always visible */}
             <div className="sticky bottom-0 border-t border-white/8 bg-[var(--admin-surface-strong)] pt-4">
               <div className="flex flex-wrap justify-end gap-3">
-                {(detail?.role || user?.role) !== "admin" && (
-                  <button
-                    onClick={loginAsUser}
-                    disabled={actionLoading}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
-                  >
-                    Login as User
-                  </button>
-                )}
+                <button
+                  onClick={loginAsUser}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
+                >
+                  Login as User
+                </button>
                 <button
                   onClick={() => {
                     setNavLoading(true);
